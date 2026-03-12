@@ -54,7 +54,10 @@ function parseWeatherXml(xml: string): ParsedForecast {
   const times = parsed.weatherdata.product.time;
   const timesArr = Array.isArray(times) ? times : [times];
 
+  // Include the current hour's forecast even if the clock has moved past it.
+  // The most recent hourly entry represents "current conditions" for display.
   const now = Date.now();
+  const minTime = now - 60 * 60 * 1000; // 1 hour ago (keep current slot)
   const maxTime = now + 7 * 60 * 60 * 1000; // 7 hours ahead
 
   const forecasts: ForecastEntry[] = [];
@@ -69,7 +72,7 @@ function parseWeatherXml(xml: string): ParsedForecast {
     }
 
     const entryTime = new Date(from).getTime();
-    if (entryTime < now || entryTime > maxTime) {
+    if (entryTime < minTime || entryTime > maxTime) {
       continue;
     }
 

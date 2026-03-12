@@ -58,7 +58,7 @@ async function handleForecast(url: URL, env: Env): Promise<Response> {
     });
   }
 
-  const cacheKey = `forecast_${roundedLat}_${roundedLon}_${modelRun}`;
+  let cacheKey = `forecast_${roundedLat}_${roundedLon}_${modelRun}`;
 
   // Return cached response if available
   const cached = await env.FORECAST_CACHE.get(cacheKey);
@@ -72,9 +72,10 @@ async function handleForecast(url: URL, env: Env): Promise<Response> {
     roundedLon
   );
 
-  // Update model run if a newer one appeared
+  // Update model run and recompute cache key if a newer run appeared
   if (freshModelRun && freshModelRun !== modelRun) {
     modelRun = freshModelRun;
+    cacheKey = `forecast_${roundedLat}_${roundedLon}_${modelRun}`;
     await env.FORECAST_CACHE.put("latest_model_run", modelRun, {
       expirationTtl: MODEL_STATUS_TTL,
     });
