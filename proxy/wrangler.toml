@@ -6,7 +6,12 @@ compatibility_date = "2024-01-01"
 binding = "FORECAST_CACHE"
 id = "PLACEHOLDER_RUN_wrangler_kv_namespace_create_FORECAST_CACHE"
 
-# Uncomment after creating the KV namespace and deploying:
-# [[routes]]
-# pattern = "example.invalid/*"
-# zone_name = "kayakshaver.com"
+# To use a custom domain, either:
+# 1. Add kayakshaver.com as a proxied zone in Cloudflare, then uncomment:
+#    [[routes]]
+#    pattern = "example.invalid/*"
+#    zone_name = "kayakshaver.com"
+# 2. Or add a Custom Domain via the Cloudflare dashboard after deploying.
+#
+# Without routes, the Worker deploys to:
+#   https://wind-force-proxy.<your-account>.workers.dev
