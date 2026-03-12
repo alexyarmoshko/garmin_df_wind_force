@@ -10,21 +10,19 @@ The data flows from Met Eireann's XML API through a Cloudflare Worker proxy (whi
 
 To see it working: deploy the Cloudflare Worker, side-load the data field onto the watch (or run it in the Connect IQ simulator), start a Kayak activity with the Wind Force field visible, and observe wind data updating as the GPS position changes.
 
-
 ## Progress
 
-- [ ] Milestone 1: Project scaffolding and static data field proof-of-concept
-- [ ] Milestone 2: Cloudflare Worker proxy with Met Eireann XML-to-JSON translation
-- [ ] Milestone 3: Data field display engine (rendering, layouts, unit conversions)
-- [ ] Milestone 4: Communication layer and fetch strategy
-- [ ] Milestone 5: User settings and staleness handling
-- [ ] Milestone 6: Integration testing, optimisation, and deployment
-
+- [ ] (2026-03-12) Milestone 1: Project scaffolding and static data field proof-of-concept
+- [ ] (2026-03-12) Milestone 2: Cloudflare Worker proxy with Met Eireann XML-to-JSON translation
+- [ ] (2026-03-12) Milestone 3: Data field display engine (rendering, layouts, unit conversions)
+- [ ] (2026-03-12) Milestone 4: Communication layer and fetch strategy
+- [ ] (2026-03-12) Milestone 5: User settings and staleness handling
+- [ ] (2026-03-12) Milestone 6: Integration testing, optimisation, and deployment
+- [x] (2026-03-12) Plan review v1: addressed all 5 findings (Wrangler syntax, model-status polling, radians, properties.xml, PLANS.md compliance)
 
 ## Surprises & Discoveries
 
 (None yet -- to be populated as implementation proceeds.)
-
 
 ## Decision Log
 
@@ -44,11 +42,17 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
   Rationale: User already has a Cloudflare account with this domain. The Worker can be deployed as a route or subdomain (e.g., `api.kayakshaver.com` or `kayakshaver.com/api/...`).
   Date/Author: 2026-03-12
 
+- Decision: All internal coordinate and heading math uses radians; degrees only for display and proxy URL parameters.
+  Rationale: `Activity.Info.currentHeading` and `Activity.Info.currentLocation` (via `Position.Location`) both use radians natively. Converting to degrees for internal math would introduce unnecessary conversions and risk unit-mismatch bugs. The proxy API expects degrees in query parameters, so conversion happens only at the HTTP call boundary. Confirmed in SDK docs at `doc/Toybox/Activity/Info.html`.
+  Date/Author: 2026-03-12
+
+- Decision: Poll `/model-status` at most once every 15 minutes, not on every compute cycle.
+  Rationale: `compute()` fires roughly once per second. Polling the proxy on every cycle would waste battery, generate excessive network traffic, and conflict with the requirements (REQUIREMENTS.md line 159-162 describes lower-frequency polling). A 15-minute interval matches the KV TTL on the proxy side and is sufficient to detect new model runs promptly.
+  Date/Author: 2026-03-12
 
 ## Outcomes & Retrospective
 
 (To be written at major milestone completions and at project end.)
-
 
 ## Context and Orientation
 
@@ -76,8 +80,8 @@ No source code exists yet. Two distinct codebases will be created:
 - **HARMONIE-AROME**: The numerical weather prediction model run by Met Eireann. It covers Ireland, the UK, and a small area of northern France. Grid resolution is approximately 2.5 km. It runs every 6 hours (00, 06, 12, 18 UTC) and produces hourly forecasts out to 90 hours.
 - **Beaufort scale**: A scale from 0 to 12 that categorises wind speed by its observed effects at sea. See `docs/Marine-Beaufort-scale.png` for the full table.
 - **Veering/backing**: A clockwise shift in wind direction is called veering (symbol: a clockwise arrow). An anticlockwise shift is called backing (symbol: an anticlockwise arrow).
-- **`makeWebRequest()`**: The Connect IQ API method `Communications.makeWebRequest()` that sends an HTTP request from the watch. The request is actually routed through the paired phone's internet connection via Bluetooth and the Garmin Connect Mobile app.
-- **`Application.Storage`**: A persistent key-value store on the watch that survives app restarts. Used to cache forecast data between fetch cycles and across activity sessions.
+- **makeWebRequest()**: The Connect IQ API method `Communications.makeWebRequest()` that sends an HTTP request from the watch. The request is actually routed through the paired phone's internet connection via Bluetooth and the Garmin Connect Mobile app.
+- **Application.Storage**: A persistent key-value store on the watch that survives app restarts. Used to cache forecast data between fetch cycles and across activity sessions.
 
 **Development environment:**
 
@@ -89,9 +93,7 @@ No source code exists yet. Two distinct codebases will be created:
 - Data field memory limit: 32,768 bytes (32 KB) -- this is tight and requires lean code
 - Cloudflare tooling: Wrangler CLI for Worker development and deployment
 
-
 ## Plan of Work
-
 
 ### Milestone 1: Project Scaffolding and Static Data Field Proof-of-Concept
 
@@ -133,9 +135,11 @@ The Connect IQ project follows a standard layout rooted in the repository direct
 `source/WindForceView.mc` -- the data field view. Extends `WatchUi.DataField`. Implements `compute(info)` to extract GPS position from `Activity.Info`, and `onUpdate(dc)` to render text on the display context. For this milestone, `onUpdate` draws the static string "3(4)N" centred on the screen.
 
 `resources/strings.xml` -- defines string resources:
+
 - `AppName`: "Wind Force"
 
 `resources/drawables.xml` -- declares the launcher icon bitmap:
+
 - `LauncherIcon`: references `images/icon.png`
 
 `resources/images/icon.png` -- a 62x62 pixel monochrome PNG. Can be a simple placeholder (e.g., a wind arrow graphic or just the letter "W").
@@ -150,7 +154,6 @@ Build command (from the VS Code Command Palette): `Monkey C: Build for Device` s
     "C:\Users\alex\AppData\Roaming\Garmin\ConnectIQ\Sdks\connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21\bin\monkeyc" -d instinct2x -f monkey.jungle -o bin\WindForce.prg -y "path\to\developer_key.der"
 
 Then in the simulator, load `bin\WindForce.prg` and start a Kayak activity.
-
 
 ### Milestone 2: Cloudflare Worker Proxy
 
@@ -179,13 +182,15 @@ This milestone builds the proxy backend that sits between the watch and Met Eire
     binding = "FORECAST_CACHE"
     id = "<KV_NAMESPACE_ID>"
 
-    [routes]
+    [[routes]]
     pattern = "api.kayakshaver.com/*"
     zone_name = "kayakshaver.com"
 
 The KV namespace ID is obtained by running `wrangler kv namespace create FORECAST_CACHE` after Wrangler is set up.
 
-**Endpoint: GET /forecast?lat={lat}&lon={lon}**
+#### Endpoint: GET /forecast
+
+URL: `/forecast?lat={lat}&lon={lon}`
 
 Processing steps:
 
@@ -216,7 +221,7 @@ Processing steps:
 
 **XML Parsing**: Cloudflare Workers do not have a built-in DOM XML parser. Use a lightweight streaming/regex-based approach to extract the needed fields from the Met Eireann XML. The XML structure uses `<time>` elements with `from` and `to` attributes, containing `<location>` elements with child elements like `<windSpeed mps="7.2" beaufort="4" .../>` and `<windDirection deg="195" name="SSW"/>` and `<windGust mps="11.3"/>`. A simple parser that extracts these attribute values using regex or a small XML parser library (such as `fast-xml-parser`, which works in Workers) is sufficient.
 
-**Endpoint: GET /model-status**
+#### Endpoint: GET /model-status
 
 1. Check KV for a key `latest_model_run`. If found and fresh (less than 15 minutes old), return it.
 2. Otherwise, fetch a minimal forecast from Met Eireann (e.g., for a fixed point like Dublin: lat=53.35, lon=-6.26) and extract the model run timestamp from the response.
@@ -242,7 +247,6 @@ For local development before deploying:
     wrangler dev
 
 Then use `http://localhost:8787/forecast?lat=53.35&lon=-6.26` to test locally.
-
 
 ### Milestone 3: Data Field Display Engine
 
@@ -271,7 +275,7 @@ These thresholds should be constants that can be tuned after on-device testing.
 - `function renderWindSlot(speed, gust, directionDeg, units)` returns a string like "3(4)N" for one time slot.
 - `function directionArrow(deg)` maps a degree value to one of 8 arrow characters. The mapping rounds the degree to the nearest 45-degree increment: 0/360 = "^" (up arrow, north), 45 = top-right arrow, 90 = right arrow, etc. The Unicode arrow characters from the requirements are: up arrow (north), upper-right arrow (NE), right arrow (E), lower-right arrow (SE), down arrow (S), lower-left arrow (SW), left arrow (W), upper-left arrow (NW). However, the Instinct 2X may not support all Unicode characters. A fallback set using cardinal letters (N, NE, E, SE, S, SW, W, NW) must be tested. The choice of arrow characters versus letters will be confirmed during this milestone by testing font rendering in the simulator.
 - `function veerBackSymbol(deg1, deg2)` returns a veering symbol (clockwise rotation arrow) if `deg2 - deg1` (normalised to -180..180) is positive, a backing symbol if negative, or empty if no change. As with direction arrows, Unicode symbol availability must be tested on the device.
-- `function convertSpeed(mps, beaufort, targetUnit)` converts wind speed to the user's chosen unit. Conversion factors from m/s: knots = mps * 1.94384, mph = mps * 2.23694, km/h = mps * 3.6. For Beaufort, use the `wind_beaufort` value directly from the API response.
+- `function convertSpeed(mps, beaufort, targetUnit)` converts wind speed to the user's chosen unit. Conversion factors from m/s: `knots = mps * 1.94384`, `mph = mps * 2.23694`, `km/h = mps * 3.6`. For Beaufort, use the `wind_beaufort` value directly from the API response.
 - `function formatLayout(forecasts, slotCount, units)` orchestrates the rendering, selecting the right number of forecast entries and composing the final display string.
 
 `source/WindData.mc` -- a simple data class to hold parsed forecast data:
@@ -292,7 +296,6 @@ These thresholds should be constants that can be tuned after on-device testing.
 
 In the simulator, configure a Kayak activity with different data field layouts (single field, 2-field, 3-field). The Wind Force field should show the appropriate number of slots. For this milestone, hardcode sample wind data (e.g., the values from the requirements example: speed 3 Beaufort, gust 4, direction NE, speed 5, gust 6, direction S). The display should render "3(4)NE>5(6)S" or similar depending on slot count.
 
-
 ### Milestone 4: Communication Layer and Fetch Strategy
 
 This milestone connects the data field to the Cloudflare Worker proxy. At the end, the data field fetches real wind data from the proxy based on the watch's GPS position and displays live forecast information during a simulated Kayak activity.
@@ -311,16 +314,19 @@ This milestone connects the data field to the Cloudflare Worker proxy. At the en
 - Tracks the position and timestamp of the last successful fetch.
 - Tracks the last known model run timestamp.
 - `function shouldFetch(currentLat, currentLon, currentTime)` returns true if any of the three triggers fire:
-  - **Distance trigger**: the Haversine distance between current position and last fetch position exceeds 1.5 km. A simplified Haversine formula in Monkey C: `d = 2 * R * arcsin(sqrt(sin^2((lat2-lat1)/2) + cos(lat1)*cos(lat2)*sin^2((lon2-lon1)/2)))` where R = 6371 km. Given the small distances involved (1-5 km), the equirectangular approximation is also acceptable and cheaper: `dx = (lon2-lon1) * cos((lat1+lat2)/2)`, `dy = lat2-lat1`, `d = sqrt(dx*dx + dy*dy) * 111.32` (km).
+  - **Distance trigger**: the Haversine distance between current position and last fetch position exceeds 1.5 km. All coordinate math uses radians internally (matching `Activity.Info.currentLocation` native units). The Haversine formula in Monkey C: `d = 2 * R * arcsin(sqrt(sin^2((lat2-lat1)/2) + cos(lat1)*cos(lat2)*sin^2((lon2-lon1)/2)))` where R = 6371 km and lat/lon are in radians. Given the small distances involved (1-5 km), the equirectangular approximation is also acceptable and cheaper: `dx = (lon2-lon1) * cos((lat1+lat2)/2)`, `dy = lat2-lat1`, `d = sqrt(dx*dx + dy*dy) * R` (km), where all values are in radians.
   - **Time trigger**: more than 30 minutes (1800 seconds) since the last successful fetch.
   - **Model run trigger**: the latest model run from `/model-status` is newer than the cached model run.
-- `function computeLookAheadPoints(lat, lon, bearingDeg)` returns 2 points along the bearing at 2.5 km intervals. The formula for a destination point given a start point, bearing, and distance: `lat2 = asin(sin(lat1)*cos(d/R) + cos(lat1)*sin(d/R)*cos(bearing))`, `lon2 = lon1 + atan2(sin(bearing)*sin(d/R)*cos(lat1), cos(d/R)-sin(lat1)*sin(lat2))`. For 2.5 km, `d/R = 2.5/6371 = 0.000392`.
-- `function executeFetchCycle(info)` is the main entry point called from the data field's `compute()` method. It:
-  1. Calls `fetchModelStatus` (lightweight, ~50 bytes).
-  2. Evaluates triggers.
-  3. If a fetch is needed, calls `fetchForecast` for the current position.
-  4. On success, computes look-ahead points from `info.currentHeading` (or derived bearing) and fetches those too (best-effort).
-  5. Stores all results in `Application.Storage`.
+- `function computeLookAheadPoints(lat, lon, bearingRad)` returns 2 points along the bearing at 2.5 km intervals. All parameters use radians: `lat` and `lon` are in radians (as returned by `Activity.Info.currentLocation`, which stores coordinates in radians natively), and `bearingRad` is in radians (as returned by `Activity.Info.currentHeading`). The destination-point formula expects radians throughout: `lat2 = asin(sin(lat1)*cos(d/R) + cos(lat1)*sin(d/R)*cos(bearing))`, `lon2 = lon1 + atan2(sin(bearing)*sin(d/R)*cos(lat1), cos(d/R)-sin(lat1)*sin(lat2))`. For 2.5 km, `d/R = 2.5/6371 = 0.000392`. Conversion to degrees is only performed when constructing the proxy URL query parameters (the proxy expects degrees) and when displaying direction arrows on screen.
+- `function executeFetchCycle(info)` is the main entry point called from the data field's `compute()` method. It applies throttling so that network calls are not made on every compute cycle (which fires roughly once per second). The logic is:
+  1. Evaluate the distance and time triggers locally (no network cost).
+  2. If at least 15 minutes have elapsed since the last `/model-status` check, call `fetchModelStatus` (~50 bytes). Store the result and timestamp. This 15-minute polling interval aligns with the requirements (`docs/REQUIREMENTS.md` line 162) and avoids unnecessary battery, network, and proxy load.
+  3. If any trigger has fired (distance, time, or model-run-changed), call `fetchForecast` for the current position.
+  4. On success, compute look-ahead points from `info.currentHeading` (which is in radians; see the radians note below) and fetch those too (best-effort).
+  5. Store all results in `Application.Storage`.
+  6. If no trigger has fired, do nothing and return immediately.
+
+  A module-level variable `_lastModelStatusCheckTime` tracks when `/model-status` was last polled. A constant `MODEL_STATUS_POLL_INTERVAL_SEC = 900` (15 minutes) controls the polling frequency.
 
 `source/StorageManager.mc` -- wraps `Application.Storage` for forecast data persistence:
 
@@ -330,7 +336,8 @@ This milestone connects the data field to the Cloudflare Worker proxy. At the en
 - `function pruneStorage()` removes old entries, keeping only the 5 most recent to stay within storage limits.
 
 `source/WindForceView.mc` -- update `compute(info)` to:
-1. Read GPS position from `info.currentLocation` (a `Position.Location` object, call `toDegrees()` to get lat/lon as a 2-element array).
+
+1. Read GPS position from `info.currentLocation` (a `Position.Location` object). Internally, `Position.Location` stores coordinates in radians. Use `toRadians()` for all internal coordinate math (distance calculations, look-ahead points). Use `toDegrees()` only when constructing the proxy URL query parameters, since the proxy API expects degrees. Read heading from `info.currentHeading`, which is in radians.
 2. Call `FetchManager.executeFetchCycle(info)`.
 3. In `onUpdate(dc)`, read the current position's forecast from `StorageManager` and pass it to `DisplayRenderer`.
 
@@ -339,12 +346,12 @@ This milestone connects the data field to the Cloudflare Worker proxy. At the en
 **How to validate:**
 
 In the simulator, configure GPS simulation to follow a route. Start a Kayak activity. The data field should:
+
 1. Show "?" initially while the first fetch is pending.
 2. After a few seconds, display real wind data from the proxy.
 3. As the simulated GPS position moves, new fetches should trigger when distance exceeds 1.5 km.
 
 Check the simulator's console output for HTTP request/response logging.
-
 
 ### Milestone 5: User Settings and Staleness Handling
 
@@ -352,7 +359,7 @@ This milestone adds the configurable settings (wind units, forecast intervals) a
 
 **Settings to implement:**
 
-`resources/settings.xml` -- (or `resources/properties.xml` depending on SDK version) declares the settings UI:
+`resources/properties.xml` -- declares both the default property values and the settings UI. In Connect IQ SDK 8.2.3, properties and settings are defined together in `resources/properties.xml`. The file contains a `<properties>` block for defaults and a `<settings>` block for the Garmin Connect Mobile / Garmin Express configuration UI:
 
     <properties>
         <property id="windUnits" type="number">0</property>
@@ -422,7 +429,6 @@ The forecast intervals (e.g., 3h, 6h) determine which entries from the `forecast
 3. Set forecast interval 2 equal to interval 1 and verify it gets clamped to interval1 + 1.
 4. To test staleness: in the simulator, disconnect the simulated phone connection, wait, and observe the staleness indicator appearing after 30 minutes (or temporarily lower the threshold for testing).
 
-
 ### Milestone 6: Integration Testing, Optimisation, and Deployment
 
 This milestone is the final integration pass. At the end, the data field is ready for side-loading onto a physical Instinct 2X Solar for real-world testing on the water.
@@ -472,7 +478,6 @@ The Instinct 2X data field memory limit is 32,768 bytes (32 KB). This is extreme
 
 The complete system is validated by performing an actual kayak paddle (or a walk/drive as a substitute) with the Instinct 2X Solar showing the Wind Force data field. The display should update with real Met Eireann wind data as the user moves. Changing settings from the phone should take effect on the next display refresh.
 
-
 ## Concrete Steps
 
 (To be updated as each milestone is implemented. The initial concrete steps for Milestone 1 are below.)
@@ -502,7 +507,6 @@ Milestone 1 steps:
     6. In the simulator, navigate to Activities > Kayak > Data Fields and verify
        Wind Force appears and displays "3(4)N".
 
-
 ## Validation and Acceptance
 
 Each milestone has its own validation section above. The overall acceptance criteria for the complete project:
@@ -519,7 +523,6 @@ Each milestone has its own validation section above. The overall acceptance crit
 10. The data field fits within the 32 KB memory limit.
 11. The Cloudflare Worker proxy correctly translates Met Eireann XML to compact JSON and caches results.
 
-
 ## Idempotence and Recovery
 
 All source files are created fresh in this plan and tracked in git. Running the build multiple times produces the same output. The Cloudflare Worker can be deployed repeatedly with `wrangler deploy` without side effects (it overwrites the previous version). KV cache entries expire via TTL and do not accumulate unboundedly.
@@ -527,7 +530,6 @@ All source files are created fresh in this plan and tracked in git. Running the 
 If a milestone is partially completed and needs to be restarted, the developer can `git stash` or `git checkout` the incomplete changes and begin the milestone from scratch using the instructions in this plan.
 
 The Met Eireann API is read-only and stateless; there is no risk of corrupting upstream data.
-
 
 ## Artifacts and Notes
 
@@ -565,7 +567,6 @@ Beaufort scale conversion reference (from `docs/Marine-Beaufort-scale.png`):
     Force 10: Storm, 48-55 knots
     Force 11: Violent storm, 56-63 knots
     Force 12: Hurricane, 64+ knots
-
 
 ## Interfaces and Dependencies
 
@@ -609,7 +610,7 @@ In `source/FetchManager.mc`:
 
     module FetchManager {
         function shouldFetch(lat as Double, lon as Double, currentTime as Number) as Boolean
-        function computeLookAheadPoints(lat as Double, lon as Double, bearingDeg as Float) as Array
+        function computeLookAheadPoints(lat as Double, lon as Double, bearingRad as Float) as Array
         function executeFetchCycle(info as Activity.Info) as Void
     }
 
@@ -684,3 +685,15 @@ In `proxy/src/met-eireann.ts`:
 - Cloudflare Wrangler CLI (`npm install -g wrangler`)
 - Node.js (for Wrangler and Worker development)
 - `fast-xml-parser` npm package (for XML parsing in the Worker, ~50 KB, well within Worker limits)
+
+---
+
+## Revision History
+
+**Revision 2 (2026-03-12):** Addressed all 5 findings from `docs/execution_plan_review.v1.md`:
+
+1. Fixed Wrangler route syntax from `[routes]` to `[[routes]]` (TOML array-of-tables).
+2. Added 15-minute throttled polling interval for `/model-status` with `MODEL_STATUS_POLL_INTERVAL_SEC` constant; `executeFetchCycle` now evaluates local triggers first and only polls the proxy on the configured interval.
+3. Standardised all internal coordinate and heading math to radians (matching `Activity.Info.currentHeading` and `Position.Location` native units). Degrees used only for display and proxy URL parameters. Updated `computeLookAheadPoints` signature from `bearingDeg` to `bearingRad`. Added Decision Log entries.
+4. Replaced ambiguous settings file reference with prescriptive `resources/properties.xml` (confirmed for SDK 8.2.3).
+5. Added timestamps to all Progress entries and added this Revision History section per PLANS.md requirements.
