@@ -88,4 +88,8 @@ Settings are configurable via Garmin Connect Mobile or Garmin Express:
 
 ## License
 
-TBD
+GNU General Public License v2 or later. See [LICENSE](LICENSE).
+
+## Author
+
+Yak Shaver - [kayakshaver.com](https://www.kayakshaver.com)
