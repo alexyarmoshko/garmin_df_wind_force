@@ -11,3 +11,5 @@ GEMINI.md
 .serena/
 bin/
 *.prg
+node_modules/
+.wrangler/
