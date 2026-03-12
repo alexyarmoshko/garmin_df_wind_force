@@ -14,3 +14,10 @@
   5. Added timestamps to all Progress entries and Revision History section per PLANS.md requirements.
   6. Added two new Decision Log entries (radians convention, model-status polling interval).
   7. Fixed all markdown lint warnings (double blank lines, blanks-around-lists, spaces-in-emphasis).
+- **Milestone 1 completed**: Project scaffolding and static data field proof-of-concept.
+  - Created `manifest.xml`, `monkey.jungle`, `source/WindForceApp.mc`, `source/WindForceView.mc`.
+  - Created `resources/strings/strings.xml`, `resources/drawables/drawables.xml`, `resources/drawables/launcher_icon.svg`.
+  - Used SVG launcher icon and resource subdirectories per SDK 8.2.3 conventions (deviation from original plan which specified PNG and flat layout).
+  - Updated `.gitignore` with `bin/` and `*.prg`.
+  - Build verified with `monkeyc -d instinct2x -l 3` (strict type checking) -- no errors or warnings.
+  - Confirmed Instinct 2X is API level 3.4 (CIQ 3.4.3); `minApiLevel="3.1.0"` is compatible.

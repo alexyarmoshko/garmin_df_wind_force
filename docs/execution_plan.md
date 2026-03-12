@@ -12,7 +12,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 
 ## Progress
 
-- [ ] (2026-03-12) Milestone 1: Project scaffolding and static data field proof-of-concept
+- [x] (2026-03-12) Milestone 1: Project scaffolding and static data field proof-of-concept
 - [ ] (2026-03-12) Milestone 2: Cloudflare Worker proxy with Met Eireann XML-to-JSON translation
 - [ ] (2026-03-12) Milestone 3: Data field display engine (rendering, layouts, unit conversions)
 - [ ] (2026-03-12) Milestone 4: Communication layer and fetch strategy
@@ -22,7 +22,10 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 
 ## Surprises & Discoveries
 
-(None yet -- to be populated as implementation proceeds.)
+- (2026-03-12) SDK 8.2.3 templates use SVG for launcher icons (not PNG). The `<bitmap>` resource element accepts SVG files with `dithering="none"`. Adopted SVG for the launcher icon.
+- (2026-03-12) SDK 8.2.3 complex data field template places resources in subdirectories (`resources/strings/strings.xml`, `resources/drawables/drawables.xml`) rather than flat (`resources/strings.xml`). Adopted the subdirectory convention.
+- (2026-03-12) The Instinct 2X device is confirmed at API level 3.4 (CIQ 3.4.3) per `compiler.json`. Our `minApiLevel="3.1.0"` is compatible.
+- (2026-03-12) Developer key at `~/.ssh/developer_key` (DER format) works for signing builds.
 
 ## Decision Log
 
@@ -697,3 +700,15 @@ In `proxy/src/met-eireann.ts`:
 3. Standardised all internal coordinate and heading math to radians (matching `Activity.Info.currentHeading` and `Position.Location` native units). Degrees used only for display and proxy URL parameters. Updated `computeLookAheadPoints` signature from `bearingDeg` to `bearingRad`. Added Decision Log entries.
 4. Replaced ambiguous settings file reference with prescriptive `resources/properties.xml` (confirmed for SDK 8.2.3).
 5. Added timestamps to all Progress entries and added this Revision History section per PLANS.md requirements.
+
+**Revision 3 (2026-03-12):** Milestone 1 completed. Created project scaffolding:
+
+- `manifest.xml` (version 3 format, `datafield` type, `instinct2x` product, `Communications` permission, `minApiLevel="3.1.0"`)
+- `monkey.jungle` (minimal build config)
+- `source/WindForceApp.mc` (AppBase subclass with `getInitialView()`)
+- `source/WindForceView.mc` (DataField subclass, renders static "3(4)N" centred on screen)
+- `resources/strings/strings.xml` (AppName = "Wind Force")
+- `resources/drawables/drawables.xml` + `launcher_icon.svg` (62x62 wind arrow placeholder)
+- Updated `.gitignore` with `bin/` and `*.prg`
+- Build verified: `monkeyc -d instinct2x -l 3` passes with no errors or warnings.
+- Deviations from original plan: used SVG icon instead of PNG (SDK 8.2.3 convention), used resource subdirectories instead of flat layout.
