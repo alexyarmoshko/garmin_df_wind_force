@@ -21,3 +21,12 @@
   - Updated `.gitignore` with `bin/` and `*.prg`.
   - Build verified with `monkeyc -d instinct2x -l 3` (strict type checking) -- no errors or warnings.
   - Confirmed Instinct 2X is API level 3.4 (CIQ 3.4.3); `minApiLevel="3.1.0"` is compatible.
+- **Milestone 2 completed**: Cloudflare Worker proxy with Met Eireann XML-to-JSON translation.
+  - Created `proxy/` directory with `package.json`, `tsconfig.json`, `wrangler.toml`.
+  - Created `proxy/src/types.ts`, `proxy/src/met-eireann.ts`, `proxy/src/index.ts`.
+  - XML parsing via `fast-xml-parser`: extracts harmonie model run timestamp and point forecast wind data.
+  - GET `/forecast?lat=&lon=` -- rounds coords to 0.025 deg, KV cache with 7h TTL, returns JSON with model_run + hourly forecasts.
+  - GET `/model-status` -- returns latest harmonie model run timestamp, KV cache with 15min TTL.
+  - CORS headers, input validation, error handling all verified.
+  - Both endpoints tested locally via `wrangler dev` + `curl`.
+  - Updated `.gitignore` with `node_modules/` and `.wrangler/`.

@@ -13,7 +13,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 ## Progress
 
 - [x] (2026-03-12) Milestone 1: Project scaffolding and static data field proof-of-concept
-- [ ] (2026-03-12) Milestone 2: Cloudflare Worker proxy with Met Eireann XML-to-JSON translation
+- [x] (2026-03-12) Milestone 2: Cloudflare Worker proxy with Met Eireann XML-to-JSON translation
 - [ ] (2026-03-12) Milestone 3: Data field display engine (rendering, layouts, unit conversions)
 - [ ] (2026-03-12) Milestone 4: Communication layer and fetch strategy
 - [ ] (2026-03-12) Milestone 5: User settings and staleness handling
@@ -26,6 +26,8 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - (2026-03-12) SDK 8.2.3 complex data field template places resources in subdirectories (`resources/strings/strings.xml`, `resources/drawables/drawables.xml`) rather than flat (`resources/strings.xml`). Adopted the subdirectory convention.
 - (2026-03-12) The Instinct 2X device is confirmed at API level 3.4 (CIQ 3.4.3) per `compiler.json`. Our `minApiLevel="3.1.0"` is compatible.
 - (2026-03-12) Developer key at `~/.ssh/developer_key` (DER format) works for signing builds.
+- (2026-03-12) Met Eireann XML contains two types of `<time>` elements: point forecasts (from === to) with wind data, and period forecasts (from !== to) with precipitation/symbols. Parser filters on from === to.
+- (2026-03-12) Met Eireann response includes multiple models (harmonie, ec_n1280_1hr, ec_n1280_3hr, ec_n1280_6hr). We extract the `termin` attribute only from the `harmonie` model entry.
 
 ## Decision Log
 
@@ -712,3 +714,13 @@ In `proxy/src/met-eireann.ts`:
 - Updated `.gitignore` with `bin/` and `*.prg`
 - Build verified: `monkeyc -d instinct2x -l 3` passes with no errors or warnings.
 - Deviations from original plan: used SVG icon instead of PNG (SDK 8.2.3 convention), used resource subdirectories instead of flat layout.
+
+**Revision 4 (2026-03-12):** Milestone 2 completed. Cloudflare Worker proxy:
+
+- `proxy/package.json`, `proxy/tsconfig.json`, `proxy/wrangler.toml` (project scaffolding)
+- `proxy/src/types.ts` (Env, ForecastEntry, ForecastResponse, ModelStatusResponse interfaces)
+- `proxy/src/met-eireann.ts` (XML fetch + parsing with fast-xml-parser; filters point forecasts where from===to; extracts harmonie model run timestamp)
+- `proxy/src/index.ts` (Worker entry point; GET /forecast with coordinate rounding to 0.025 deg, KV caching with 7h TTL; GET /model-status with 15min TTL; CORS headers; input validation)
+- Both endpoints tested locally via `wrangler dev`: `/forecast?lat=53.35&lon=-6.26` returns 7 hourly forecasts with wind_mps, wind_deg, wind_beaufort, gust_mps; `/model-status` returns harmonie model run timestamp.
+- Error handling verified: missing params (400), invalid coords (400), unknown paths (404).
+- KV namespace ID is a placeholder; must run `wrangler kv namespace create FORECAST_CACHE` before deploying.

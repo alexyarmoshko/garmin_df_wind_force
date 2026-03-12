@@ -1,0 +1,12 @@
+name = "wind-force-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "FORECAST_CACHE"
+id = "PLACEHOLDER_RUN_wrangler_kv_namespace_create_FORECAST_CACHE"
+
+# Uncomment after creating the KV namespace and deploying:
+# [[routes]]
+# pattern = "api.kayakshaver.com/*"
+# zone_name = "kayakshaver.com"
