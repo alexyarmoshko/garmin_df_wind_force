@@ -1,8 +1,12 @@
 import Toybox.Lang;
+import Toybox.Time;
 
 // Layout width thresholds (px) -- tune after on-device testing
 const THRESHOLD_2_SLOT = 90;
 const THRESHOLD_3_SLOT = 150;
+
+// Staleness threshold in seconds (30 minutes)
+const STALE_THRESHOLD_SEC = 1800;
 
 module DisplayRenderer {
 
@@ -18,17 +22,14 @@ module DisplayRenderer {
     }
 
     //! Build the full display string for the given forecasts.
-    //! The forecasts array already contains exactly the entries requested
-    //! via the proxy's slots parameter, with pre-converted values and
-    //! veer/back symbols.
-    //! @param forecasts Array of WindData
-    //! @param fetchTimestamp Unix epoch seconds of last successful fetch
+    //! @param forecasts Array of WindData (may be empty)
+    //! @param fetchTimestamp Unix epoch seconds of last successful fetch (0 if never)
     function formatLayout(
         forecasts as Array<WindData>,
         fetchTimestamp as Number
     ) as String {
         if (forecasts.size() == 0) {
-            return "?(?)";
+            return "?(?)? ?";
         }
 
         var result = renderWindSlot(forecasts[0]);
@@ -37,6 +38,15 @@ module DisplayRenderer {
             var v = forecasts[i].veer;
             result += (v != null) ? v : ">";
             result += renderWindSlot(forecasts[i]);
+        }
+
+        // Staleness indicator
+        if (fetchTimestamp > 0) {
+            var age = Time.now().value() - fetchTimestamp;
+            if (age > STALE_THRESHOLD_SEC) {
+                var ageMin = age / 60;
+                result += "*" + ageMin.toString() + "m";
+            }
         }
 
         return result;
