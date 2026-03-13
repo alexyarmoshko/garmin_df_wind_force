@@ -14,7 +14,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 
 - [x] (2026-03-12) Milestone 1: Project scaffolding and static data field proof-of-concept
 - [x] (2026-03-12) Milestone 2: Cloudflare Worker proxy with Met Eireann XML-to-JSON translation
-- [ ] (2026-03-12) Milestone 3: Data field display engine (rendering, layouts, unit conversions)
+- [x] (2026-03-13) Milestone 3: Data field display engine (rendering, layouts, unit conversions)
 - [ ] (2026-03-12) Milestone 4: Communication layer and fetch strategy
 - [ ] (2026-03-12) Milestone 5: User settings and staleness handling
 - [ ] (2026-03-12) Milestone 6: Integration testing, optimisation, and deployment
@@ -28,6 +28,8 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - (2026-03-12) Developer key at `~/.ssh/developer_key` (DER format) works for signing builds.
 - (2026-03-12) Met Eireann XML contains two types of `<time>` elements: point forecasts (from === to) with wind data, and period forecasts (from !== to) with precipitation/symbols. Parser filters on from === to.
 - (2026-03-12) Met Eireann response includes multiple models (harmonie, ec_n1280_1hr, ec_n1280_3hr, ec_n1280_6hr). We extract the `termin` attribute only from the `harmonie` model entry.
+- (2026-03-13) The Instinct 2X large data field slot is wide enough for the 3-slot layout with auto font sizing. Memory usage at 9.4/28.5kB after adding the display engine — still ~19kB headroom for the remaining milestones.
+- (2026-03-13) Cardinal letters (N, NE, E, etc.) render correctly on the Instinct 2X fonts. Unicode arrow testing deferred — letters are compact and readable.
 
 ## Decision Log
 
@@ -724,3 +726,15 @@ In `proxy/src/met-eireann.ts`:
 - Both endpoints tested locally via `wrangler dev`: `/forecast?lat=53.35&lon=-6.26` returns 7 hourly forecasts with wind_mps, wind_deg, wind_beaufort, gust_mps; `/model-status` returns harmonie model run timestamp.
 - Error handling verified: missing params (400), invalid coords (400), unknown paths (404).
 - KV namespace ID is a placeholder; must run `wrangler kv namespace create FORECAST_CACHE` before deploying.
+
+**Revision 5 (2026-03-13):** Milestone 3 completed. Display engine:
+
+- `source/WindData.mc` (data class: time, windMps, windDeg, windBeaufort, gustMps)
+- `source/DisplayRenderer.mc` (module: renderWindSlot, directionLabel, veerBackSymbol, convertSpeed, mpsToBeaufort, formatLayout, slotCount)
+- Updated `source/WindForceView.mc` (onLayout determines slot count from dc width; onUpdate calls DisplayRenderer with hardcoded sample data; selectFont auto-picks largest font that fits)
+- Layout selection: 1-slot (<90px), 2-slot (90-149px), 3-slot (>=150px)
+- Direction: 8 cardinal/intercardinal labels (N, NE, E, SE, S, SW, W, NW)
+- Veer/back: ">" for veering (clockwise), "<" for backing (anticlockwise)
+- Unit conversion: Beaufort (default), knots, mph, km/h, m/s with mpsToBeaufort lookup for gust
+- Verified in simulator: small slot shows "3(4)NE", large slot shows "3(4)NE>5(6)S>3(5)SW"
+- Memory: 9.4/28.5kB — ~19kB headroom remaining.

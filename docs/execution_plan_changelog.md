@@ -30,3 +30,16 @@
   - CORS headers, input validation, error handling all verified.
   - Both endpoints tested locally via `wrangler dev` + `curl`.
   - Updated `.gitignore` with `node_modules/` and `.wrangler/`.
+- Addressed code review v1 findings (`docs/code_review.v1.md`):
+  1. Fixed `/forecast` dropping the current hour's slot — changed time filter from `now` to `now - 1h`.
+  2. Fixed cache key not recomputed after model run update — `cacheKey` now recalculated when `freshModelRun` differs.
+
+## 2026-03-13
+
+- **Milestone 3 completed**: Data field display engine.
+  - Created `source/WindData.mc` (data class for forecast entries).
+  - Created `source/DisplayRenderer.mc` (module: slot rendering, direction labels, veer/back symbols, unit conversion, layout formatting).
+  - Updated `source/WindForceView.mc` to use DisplayRenderer with hardcoded sample data and auto font sizing.
+  - Layout adapts to field width: 1-slot (<90px), 2-slot (90-149px), 3-slot (>=150px).
+  - Verified in simulator: small slot shows "3(4)NE", large slot shows "3(4)NE>5(6)S>3(5)SW".
+  - Memory usage: 9.4/28.5kB.
