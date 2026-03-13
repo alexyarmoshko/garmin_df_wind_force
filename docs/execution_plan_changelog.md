@@ -73,3 +73,8 @@
   - Created `resources/properties/properties.xml` with default property values (windUnits=0, forecastInterval1=3, forecastInterval2=6) required by FetchManager.
   - FetchManager is a class (not module) because `Communications.makeWebRequest()` callbacks require `method(:name)` which needs an instance `self`.
   - PRG file size: 11.6 KB (release build). ~20 KB headroom remaining.
+- Addressed code review v2 findings (`docs/code_review.v2.md`):
+  1. Fixed fetch state recorded before success: `_lastFetchTime`, `_lastFetchLatRad/Lon`, `_lastFetchedUnits/Slots` now set only in `onForecastReceived` on HTTP 200. Pending coordinates stored separately in `_pendingLatRad/Lon`. Failed fetches no longer suppress retries.
+  2. Fixed position-blind forecast lookup: `findBestForecast()` now uses current GPS position via `FetchManager.currentLatDeg/Lon` to try `StorageManager.loadForecast()` (exact rounded match) first, then `StorageManager.loadNearestForecast()` (nearest within 2.5 km). Falls back to last stored entry only when no GPS fix available.
+  3. Fixed look-ahead storage: look-ahead coordinates queued as `_laQueue` in `executeFetchCycle()` and consumed FIFO in `onLookAheadReceived()`. Data now stored via `StorageManager.storeForecast()` with proper rounded coordinates, enabling nearest-cache lookup and obeying the pruning limit.
+  - PRG file size after fixes: 12.1 KB (release build).

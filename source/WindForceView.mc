@@ -94,18 +94,34 @@ class WindForceView extends WatchUi.DataField {
     }
 
     //! Find the best available forecast dictionary from storage.
-    //! Scans stored forecast keys for the nearest cached grid point.
+    //! Uses current GPS position: tries exact rounded match first,
+    //! then falls back to nearest cached grid point within 2.5 km.
     private function findBestForecast() as Dictionary? {
-        var keys = StorageManager.getStoredKeys();
-        // Return the most recent stored forecast (last in the keys list)
-        if (keys.size() > 0) {
-            var lastKey = keys[keys.size() - 1];
-            var val = Storage.getValue(lastKey);
-            if (val instanceof Dictionary) {
-                return val as Dictionary;
+        if (!_fetchMgr.hasPosition) {
+            // No GPS yet — try last stored entry as fallback
+            var keys = StorageManager.getStoredKeys();
+            if (keys.size() > 0) {
+                var val = Storage.getValue(keys[keys.size() - 1]);
+                if (val instanceof Dictionary) {
+                    return val as Dictionary;
+                }
             }
+            return null;
         }
-        return null;
+
+        var latDeg = _fetchMgr.currentLatDeg;
+        var lonDeg = _fetchMgr.currentLonDeg;
+
+        // Try exact rounded coordinate match
+        var rLat = StorageManager.roundCoord(latDeg);
+        var rLon = StorageManager.roundCoord(lonDeg);
+        var exact = StorageManager.loadForecast(rLat, rLon);
+        if (exact != null) {
+            return exact;
+        }
+
+        // Fall back to nearest cached grid point within 2.5 km
+        return StorageManager.loadNearestForecast(latDeg, lonDeg);
     }
 
     //! Select the largest font whose text width fits the field.
