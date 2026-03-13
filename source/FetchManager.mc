@@ -17,17 +17,34 @@ const EARTH_RADIUS_KM = 6371.0;
 
 class FetchManager {
 
+    // Last *successful* fetch state (only updated on 200 response)
     private var _lastFetchLatRad as Double = 0.0d;
     private var _lastFetchLonRad as Double = 0.0d;
     private var _lastFetchTime as Number = 0;
-    private var _lastModelRun as String = "";
-    private var _lastModelCheckTime as Number = 0;
     private var _lastFetchedUnits as String = "";
     private var _lastFetchedSlots as String = "";
+
+    // Pending fetch coordinates (set when request fires, used by callback)
+    private var _pendingLatRad as Double = 0.0d;
+    private var _pendingLonRad as Double = 0.0d;
+    private var _pendingUnits as String = "";
+    private var _pendingSlots as String = "";
+
+    // Look-ahead coordinate queue: [[latDeg, lonDeg], ...]
+    private var _laQueue as Array< Array<Double> >;
+
+    private var _lastModelRun as String = "";
+    private var _lastModelCheckTime as Number = 0;
     private var _fetchInProgress as Boolean = false;
     private var _slotCount as Number = 1;
 
+    // Current GPS position in degrees (updated each compute cycle for view lookup)
+    var currentLatDeg as Double = 0.0d;
+    var currentLonDeg as Double = 0.0d;
+    var hasPosition as Boolean = false;
+
     function initialize() {
+        _laQueue = [] as Array< Array<Double> >;
     }
 
     //! Set the current slot count (called from WindForceView.onLayout).
@@ -51,6 +68,11 @@ class FetchManager {
         var lonRad = coords[1] as Double;
         var now = Time.now().value();
 
+        // Update current position for the view's position-aware lookup
+        currentLatDeg = latRad * 180.0d / Math.PI;
+        currentLonDeg = lonRad * 180.0d / Math.PI;
+        hasPosition = true;
+
         var units = getWindUnitsString();
         var slots = buildSlotsString();
 
@@ -62,6 +84,7 @@ class FetchManager {
 
         // Evaluate triggers
         var triggered = false;
+        var distanceTrigger = false;
 
         if (_lastFetchTime == 0) {
             triggered = true;
@@ -69,6 +92,7 @@ class FetchManager {
             var dist = haversineKm(latRad, lonRad, _lastFetchLatRad, _lastFetchLonRad);
             if (dist > DISTANCE_TRIGGER_KM) {
                 triggered = true;
+                distanceTrigger = true;
             }
             if (now - _lastFetchTime > TIME_TRIGGER_SEC) {
                 triggered = true;
@@ -83,27 +107,26 @@ class FetchManager {
             return;
         }
 
+        // Record pending state (only committed to _lastFetch* on success)
         _fetchInProgress = true;
-        var latDeg = latRad * 180.0d / Math.PI;
-        var lonDeg = lonRad * 180.0d / Math.PI;
+        _pendingLatRad = latRad;
+        _pendingLonRad = lonRad;
+        _pendingUnits = units;
+        _pendingSlots = slots;
 
-        ForecastService.fetchForecast(latDeg, lonDeg, units, slots, method(:onForecastReceived));
+        ForecastService.fetchForecast(currentLatDeg, currentLonDeg, units, slots, method(:onForecastReceived));
 
-        _lastFetchLatRad = latRad;
-        _lastFetchLonRad = lonRad;
-        _lastFetchTime = now;
-        _lastFetchedUnits = units;
-        _lastFetchedSlots = slots;
-
-        // Look-ahead points along current bearing
+        // Look-ahead points along current bearing (on distance trigger or first fetch)
         var bearing = info.currentHeading;
-        if (bearing != null) {
+        if (bearing != null && (distanceTrigger || _lastFetchTime == 0)) {
+            _laQueue = [] as Array< Array<Double> >;
             var bearingD = (bearing as Float).toDouble();
             for (var i = 1; i <= 2; i++) {
                 var distKm = (LOOK_AHEAD_DIST_KM * i).toDouble();
                 var pt = destinationPoint(latRad, lonRad, bearingD, distKm);
                 var laLatDeg = pt[0] * 180.0d / Math.PI;
                 var laLonDeg = pt[1] * 180.0d / Math.PI;
+                _laQueue.add([laLatDeg, laLonDeg] as Array<Double>);
                 ForecastService.fetchForecast(laLatDeg, laLonDeg, units, slots, method(:onLookAheadReceived));
             }
         }
@@ -126,34 +149,37 @@ class FetchManager {
         _fetchInProgress = false;
         if (responseCode == 200 && data instanceof Dictionary) {
             var dict = data as Dictionary;
-            var latDeg = _lastFetchLatRad * 180.0d / Math.PI;
-            var lonDeg = _lastFetchLonRad * 180.0d / Math.PI;
+            // Commit fetch state only on success
+            _lastFetchLatRad = _pendingLatRad;
+            _lastFetchLonRad = _pendingLonRad;
+            _lastFetchTime = Time.now().value();
+            _lastFetchedUnits = _pendingUnits;
+            _lastFetchedSlots = _pendingSlots;
+
+            var latDeg = _pendingLatRad * 180.0d / Math.PI;
+            var lonDeg = _pendingLonRad * 180.0d / Math.PI;
             var rLat = StorageManager.roundCoord(latDeg);
             var rLon = StorageManager.roundCoord(lonDeg);
             StorageManager.storeForecast(rLat, rLon, dict);
-            Storage.setValue("last_fetch_ts", Time.now().value());
+            Storage.setValue("last_fetch_ts", _lastFetchTime);
         }
         WatchUi.requestUpdate();
     }
 
     //! Callback for look-ahead forecast (best-effort).
+    //! Pops coordinates from the queue and stores via StorageManager.
     function onLookAheadReceived(responseCode as Number, data as Dictionary or String or Null) as Void {
-        if (responseCode == 200 && data instanceof Dictionary) {
-            var dict = data as Dictionary;
-            // Store look-ahead data for nearest-forecast lookup
-            // We derive rounded coords from the response model_run and forecasts
-            // For look-aheads, store with a sequential key that loadNearestForecast can scan
-            var forecasts = dict["forecasts"];
-            if (forecasts instanceof Array && (forecasts as Array).size() > 0) {
-                var first = (forecasts as Array)[0];
-                if (first instanceof Dictionary) {
-                    // Use forecast time as part of key to avoid collisions
-                    var t = (first as Dictionary)["time"];
-                    if (t instanceof String) {
-                        Storage.setValue("la_" + t, dict);
-                    }
-                }
-            }
+        // Pop the first queued coordinate pair
+        var coordsDeg = null as Array<Double>?;
+        if (_laQueue.size() > 0) {
+            coordsDeg = _laQueue[0];
+            _laQueue = _laQueue.slice(1, null) as Array< Array<Double> >;
+        }
+
+        if (responseCode == 200 && data instanceof Dictionary && coordsDeg != null) {
+            var rLat = StorageManager.roundCoord(coordsDeg[0]);
+            var rLon = StorageManager.roundCoord(coordsDeg[1]);
+            StorageManager.storeForecast(rLat, rLon, data as Dictionary);
         }
     }
 
