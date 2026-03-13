@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import { ForecastEntry } from "./types";
+import { RawForecastEntry } from "./types";
 
 const MET_EIREANN_BASE =
   "http://openaccess.pf.api.met.ie/metno-wdb2ts/locationforecast";
@@ -15,7 +15,7 @@ const parser = new XMLParser({
 
 interface ParsedForecast {
   modelRun: string;
-  forecasts: ForecastEntry[];
+  forecasts: RawForecastEntry[];
 }
 
 export async function fetchAndParseForecast(
@@ -60,7 +60,7 @@ function parseWeatherXml(xml: string): ParsedForecast {
   const minTime = now - 60 * 60 * 1000; // 1 hour ago (keep current slot)
   const maxTime = now + 7 * 60 * 60 * 1000; // 7 hours ahead
 
-  const forecasts: ForecastEntry[] = [];
+  const forecasts: RawForecastEntry[] = [];
 
   for (const entry of timesArr) {
     const from: string = entry["@_from"];
