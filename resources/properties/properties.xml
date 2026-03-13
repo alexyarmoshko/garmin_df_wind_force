@@ -1,0 +1,5 @@
+<properties>
+    <property id="windUnits" type="number">0</property>
+    <property id="forecastInterval1" type="number">3</property>
+    <property id="forecastInterval2" type="number">6</property>
+</properties>

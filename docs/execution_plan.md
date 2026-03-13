@@ -15,7 +15,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - [x] (2026-03-12) Milestone 1: Project scaffolding and static data field proof-of-concept
 - [x] (2026-03-12) Milestone 2: Cloudflare Worker proxy with Met Eireann XML-to-JSON translation
 - [x] (2026-03-13) Milestone 3: Data field display engine (rendering, layouts, unit conversions)
-- [ ] (2026-03-12) Milestone 4: Communication layer and fetch strategy
+- [x] (2026-03-13) Milestone 4: Communication layer and fetch strategy
 - [ ] (2026-03-12) Milestone 5: User settings and staleness handling
 - [ ] (2026-03-12) Milestone 6: Integration testing, optimisation, and deployment
 - [x] (2026-03-12) Plan review v1: addressed all 5 findings (Wrangler syntax, model-status polling, radians, properties.xml, PLANS.md compliance)
@@ -30,6 +30,9 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - (2026-03-12) Met Eireann response includes multiple models (harmonie, ec_n1280_1hr, ec_n1280_3hr, ec_n1280_6hr). We extract the `termin` attribute only from the `harmonie` model entry.
 - (2026-03-13) The Instinct 2X large data field slot is wide enough for the 3-slot layout with auto font sizing. Memory usage at 9.4/28.5kB after adding the display engine — still ~19kB headroom for the remaining milestones.
 - (2026-03-13) Cardinal letters (N, NE, E, etc.) render correctly on the Instinct 2X fonts. Unicode arrow testing deferred — letters are compact and readable.
+- (2026-03-13) Monkey C modules cannot use `method(:name)` for callbacks (no `self`). FetchManager must be a class, not a module, because `Communications.makeWebRequest()` requires a method reference callback. DisplayRenderer and StorageManager remain modules (no callbacks needed).
+- (2026-03-13) Monkey C `const` float literals (e.g., `2.5`) are `Float`, not `Double`. When passing to functions expecting `Double`, must call `.toDouble()` explicitly.
+- (2026-03-13) PRG file size after Milestone 4: 11.6 KB (release build). Still ~20 KB headroom within the 32 KB limit.
 
 ## Decision Log
 

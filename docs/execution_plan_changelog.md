@@ -64,3 +64,12 @@
   - Interval setting change now triggers refetch (same as unit change).
   - TypeScript `ForecastEntry` field `wind_deg` replaced by `veer: string | null`.
   - Decision Log entry updated to include slot selection and veer/back.
+- **Milestone 4 completed**: Communication layer and fetch strategy.
+  - Created `source/ForecastService.mc` (module: `fetchForecast()` and `fetchModelStatus()` wrapping `Communications.makeWebRequest()`).
+  - Created `source/StorageManager.mc` (module: `storeForecast()`, `loadForecast()`, `loadNearestForecast()`, `pruneStorage()`, `roundCoord()` wrapping `Application.Storage`).
+  - Created `source/FetchManager.mc` (class: `executeFetchCycle()` with distance/time/model-run/settings triggers, look-ahead point computation, Haversine distance, destination-point formula).
+  - Updated `source/WindForceView.mc`: `compute()` calls `FetchManager.executeFetchCycle()`, `onUpdate()` loads forecasts from storage and passes to `DisplayRenderer`.
+  - Updated `source/DisplayRenderer.mc`: added staleness indicator (age in minutes with `*` prefix when data >30 min old), improved unavailable data display (`?(?)? ?`).
+  - Created `resources/properties/properties.xml` with default property values (windUnits=0, forecastInterval1=3, forecastInterval2=6) required by FetchManager.
+  - FetchManager is a class (not module) because `Communications.makeWebRequest()` callbacks require `method(:name)` which needs an instance `self`.
+  - PRG file size: 11.6 KB (release build). ~20 KB headroom remaining.
