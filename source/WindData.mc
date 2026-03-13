@@ -2,22 +2,22 @@ import Toybox.Lang;
 
 class WindData {
     var time as String;
-    var windMps as Float;
-    var windDeg as Number;
-    var windBeaufort as Number;
-    var gustMps as Float;
+    var windSpeed as Number;      // pre-converted integer in the requested unit
+    var gustSpeed as Number;      // pre-converted integer in the same unit
+    var windDir as String;        // cardinal/intercardinal label (e.g., "NE")
+    var veer as String or Null;   // ">" (veering), "<" (backing), or null (first entry)
 
     function initialize(
         time as String,
-        windMps as Float,
-        windDeg as Number,
-        windBeaufort as Number,
-        gustMps as Float
+        windSpeed as Number,
+        gustSpeed as Number,
+        windDir as String,
+        veer as String or Null
     ) {
         self.time = time;
-        self.windMps = windMps;
-        self.windDeg = windDeg;
-        self.windBeaufort = windBeaufort;
-        self.gustMps = gustMps;
+        self.windSpeed = windSpeed;
+        self.gustSpeed = gustSpeed;
+        self.windDir = windDir;
+        self.veer = veer;
     }
 }

@@ -1,4 +1,10 @@
-import { Env, ForecastResponse } from "./types";
+import {
+  Env,
+  RawForecastEntry,
+  RawForecastResponse,
+  ForecastEntry,
+  ForecastResponse,
+} from "./types";
 import { fetchAndParseForecast, fetchModelRunTimestamp } from "./met-eireann";
 
 const FORECAST_TTL = 25_200; // 7 hours
@@ -22,7 +28,119 @@ function errorResponse(message: string, status: number): Response {
   return jsonResponse({ error: message }, status);
 }
 
-// ── /forecast ────────────────────────────────────────────────────────
+// ── Unit conversion ───────────────────────────────────────────────────
+
+type WindUnit = "beaufort" | "knots" | "mph" | "kmh" | "mps";
+
+const VALID_UNITS: Set<string> = new Set([
+  "beaufort",
+  "knots",
+  "mph",
+  "kmh",
+  "mps",
+]);
+
+/** Beaufort scale breakpoints in m/s. Index = Beaufort number. */
+const BEAUFORT_MPS = [
+  0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7,
+];
+
+function mpsToBeaufort(mps: number): number {
+  for (let i = 0; i < BEAUFORT_MPS.length; i++) {
+    if (mps < BEAUFORT_MPS[i]) return i;
+  }
+  return 12;
+}
+
+function convertMps(mps: number, unit: WindUnit): number {
+  switch (unit) {
+    case "beaufort":
+      return mpsToBeaufort(mps);
+    case "knots":
+      return Math.round(mps * 1.94384);
+    case "mph":
+      return Math.round(mps * 2.23694);
+    case "kmh":
+      return Math.round(mps * 3.6);
+    case "mps":
+      return Math.round(mps);
+  }
+}
+
+// ── Direction labels ──────────────────────────────────────────────────
+
+const DIRECTION_LABELS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
+function degToCardinal(deg: number): string {
+  const idx = Math.round(((deg % 360) + 360) % 360 / 45) % 8;
+  return DIRECTION_LABELS[idx];
+}
+
+// ── Veer/back ─────────────────────────────────────────────────────────
+
+function veerSymbol(deg1: number, deg2: number): string {
+  let diff = deg2 - deg1;
+  // Normalize to -180..180
+  while (diff > 180) diff -= 360;
+  while (diff < -180) diff += 360;
+  return diff >= 0 ? ">" : "<";
+}
+
+// ── Slot selection ────────────────────────────────────────────────────
+
+function parseSlots(slotsParam: string | null): number[] {
+  if (!slotsParam) return [0];
+  const parts = slotsParam
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !isNaN(n) && n >= 0 && n <= 7);
+  if (parts.length === 0) return [0];
+  return parts.slice(0, 3); // max 3 slots
+}
+
+/** Pick the raw entry whose time is closest to now + offsetHours. */
+function selectEntry(
+  forecasts: RawForecastEntry[],
+  offsetHours: number
+): RawForecastEntry | null {
+  if (forecasts.length === 0) return null;
+  const target = Date.now() + offsetHours * 3600_000;
+  let best = forecasts[0];
+  let bestDiff = Math.abs(new Date(best.time).getTime() - target);
+  for (let i = 1; i < forecasts.length; i++) {
+    const diff = Math.abs(new Date(forecasts[i].time).getTime() - target);
+    if (diff < bestDiff) {
+      best = forecasts[i];
+      bestDiff = diff;
+    }
+  }
+  return best;
+}
+
+/** Select slots, convert units, compute direction labels and veer/back. */
+function buildResponse(
+  raw: RawForecastResponse,
+  unit: WindUnit,
+  slots: number[]
+): ForecastResponse {
+  const selected: RawForecastEntry[] = [];
+  for (const offset of slots) {
+    const entry = selectEntry(raw.forecasts, offset);
+    if (entry) selected.push(entry);
+  }
+
+  const forecasts: ForecastEntry[] = selected.map((entry, i) => ({
+    time: entry.time,
+    wind_speed: convertMps(entry.wind_mps, unit),
+    gust_speed: convertMps(entry.gust_mps, unit),
+    wind_dir: degToCardinal(entry.wind_deg),
+    veer: i === 0 ? null : veerSymbol(selected[i - 1].wind_deg, entry.wind_deg),
+  }));
+
+  return { model_run: raw.model_run, units: unit, forecasts };
+}
+
+// ── /forecast ─────────────────────────────────────────────────────────
 
 async function handleForecast(url: URL, env: Env): Promise<Response> {
   const latParam = url.searchParams.get("lat");
@@ -49,6 +167,13 @@ async function handleForecast(url: URL, env: Env): Promise<Response> {
   const roundedLat = roundCoord(lat);
   const roundedLon = roundCoord(lon);
 
+  // Parse optional units and slots params
+  const unitsParam = url.searchParams.get("units") ?? "beaufort";
+  const unit: WindUnit = VALID_UNITS.has(unitsParam)
+    ? (unitsParam as WindUnit)
+    : "beaufort";
+  const slots = parseSlots(url.searchParams.get("slots"));
+
   // Resolve the current model run for the cache key
   let modelRun = await env.FORECAST_CACHE.get("latest_model_run");
   if (!modelRun) {
@@ -58,40 +183,42 @@ async function handleForecast(url: URL, env: Env): Promise<Response> {
     });
   }
 
-  let cacheKey = `forecast_${roundedLat}_${roundedLon}_${modelRun}`;
+  const cacheKey = `forecast_${roundedLat}_${roundedLon}_${modelRun}`;
 
-  // Return cached response if available
+  // Check for cached raw forecast
+  let raw: RawForecastResponse;
   const cached = await env.FORECAST_CACHE.get(cacheKey);
   if (cached) {
-    return new Response(cached, { headers: CORS_HEADERS });
-  }
+    raw = JSON.parse(cached);
+  } else {
+    // Fetch fresh data from Met Eireann
+    const { modelRun: freshModelRun, forecasts } = await fetchAndParseForecast(
+      roundedLat,
+      roundedLon
+    );
 
-  // Fetch fresh data from Met Eireann
-  const { modelRun: freshModelRun, forecasts } = await fetchAndParseForecast(
-    roundedLat,
-    roundedLon
-  );
+    // Update model run if a newer run appeared
+    let effectiveModelRun = modelRun;
+    if (freshModelRun && freshModelRun !== modelRun) {
+      effectiveModelRun = freshModelRun;
+      await env.FORECAST_CACHE.put("latest_model_run", effectiveModelRun, {
+        expirationTtl: MODEL_STATUS_TTL,
+      });
+    }
 
-  // Update model run and recompute cache key if a newer run appeared
-  if (freshModelRun && freshModelRun !== modelRun) {
-    modelRun = freshModelRun;
-    cacheKey = `forecast_${roundedLat}_${roundedLon}_${modelRun}`;
-    await env.FORECAST_CACHE.put("latest_model_run", modelRun, {
-      expirationTtl: MODEL_STATUS_TTL,
+    raw = { model_run: effectiveModelRun, forecasts };
+    const rawKey = `forecast_${roundedLat}_${roundedLon}_${effectiveModelRun}`;
+    await env.FORECAST_CACHE.put(rawKey, JSON.stringify(raw), {
+      expirationTtl: FORECAST_TTL,
     });
   }
 
-  const response: ForecastResponse = { model_run: modelRun, forecasts };
-  const body = JSON.stringify(response);
-
-  await env.FORECAST_CACHE.put(cacheKey, body, {
-    expirationTtl: FORECAST_TTL,
-  });
-
-  return new Response(body, { headers: CORS_HEADERS });
+  // Convert and return
+  const response = buildResponse(raw, unit, slots);
+  return jsonResponse(response);
 }
 
-// ── /model-status ────────────────────────────────────────────────────
+// ── /model-status ─────────────────────────────────────────────────────
 
 async function handleModelStatus(env: Env): Promise<Response> {
   const cached = await env.FORECAST_CACHE.get("latest_model_run");
@@ -107,7 +234,7 @@ async function handleModelStatus(env: Env): Promise<Response> {
   return jsonResponse({ model_run: modelRun });
 }
 
-// ── Worker entry point ───────────────────────────────────────────────
+// ── Worker entry point ────────────────────────────────────────────────
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

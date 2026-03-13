@@ -2,7 +2,8 @@ export interface Env {
   FORECAST_CACHE: KVNamespace;
 }
 
-export interface ForecastEntry {
+/** Raw forecast entry as parsed from Met Eireann XML (stored in KV cache). */
+export interface RawForecastEntry {
   time: string;
   wind_mps: number;
   wind_deg: number;
@@ -10,9 +11,24 @@ export interface ForecastEntry {
   gust_mps: number;
 }
 
+/** Converted forecast entry returned to the watch. */
+export interface ForecastEntry {
+  time: string;
+  wind_speed: number;
+  gust_speed: number;
+  wind_dir: string;
+  veer: string | null;
+}
+
 export interface ForecastResponse {
   model_run: string;
+  units: string;
   forecasts: ForecastEntry[];
+}
+
+export interface RawForecastResponse {
+  model_run: string;
+  forecasts: RawForecastEntry[];
 }
 
 export interface ModelStatusResponse {

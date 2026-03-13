@@ -43,3 +43,24 @@
   - Layout adapts to field width: 1-slot (<90px), 2-slot (90-149px), 3-slot (>=150px).
   - Verified in simulator: small slot shows "3(4)NE", large slot shows "3(4)NE>5(6)S>3(5)SW".
   - Memory usage: 9.4/28.5kB.
+- **Architectural change documented (Revision 6)**: Move unit conversion, Beaufort lookup, and direction labelling from the watch to the proxy.
+  - `/forecast` endpoint now accepts `units` query parameter (`beaufort`, `knots`, `mph`, `kmh`, `mps`).
+  - Raw data cached in KV; conversion applied on the fly per request.
+  - New response shape: `wind_speed` (int), `gust_speed` (int), `wind_dir` (cardinal label), `wind_deg` (raw degrees), top-level `units` field.
+  - Watch-side `DisplayRenderer` simplified: removed `convertSpeed()`, `mpsToBeaufort()`, `directionLabel()`.
+  - `WindData` now holds pre-converted integers + direction string instead of raw floats.
+  - `ForecastService.fetchForecast()` gains `units` parameter; `FetchManager` tracks `_lastFetchedUnits` as a fetch trigger.
+  - `SettingsManager` gains `getWindUnitsString()` to map numeric setting to proxy-compatible string.
+  - Unit setting change triggers refetch (option 1) — brief 1-3s delay while new data is fetched.
+  - TypeScript `types.ts` splits into `RawForecastEntry` (internal) and `ForecastEntry` (response); `ForecastResponse` gains `units` field.
+  - Decision Log entry added. Execution plan updated across Milestones 2-5 and Interfaces section.
+- **Architectural change documented (Revision 7)**: Move slot selection and veer/back computation from watch to proxy.
+  - `/forecast` endpoint gains `slots` query parameter (comma-separated hour offsets, e.g., `0,3,6`, max 3 values, default `0`).
+  - Proxy selects closest forecast entry for each offset, computes veer/back between consecutive selected entries.
+  - Response field `wind_deg` replaced by `veer` (`">"`, `"<"`, or `null` for first entry).
+  - Watch-side `DisplayRenderer` further simplified: removed `veerBackSymbol()`, `formatLayout()` no longer does interval selection.
+  - `WindData` field `windDeg` replaced by `veer` (String or Null).
+  - `ForecastService.fetchForecast()` gains `slots` parameter; `FetchManager` builds slots string from slot count + interval settings, tracks `_lastFetchedSlots` as fetch trigger.
+  - Interval setting change now triggers refetch (same as unit change).
+  - TypeScript `ForecastEntry` field `wind_deg` replaced by `veer: string | null`.
+  - Decision Log entry updated to include slot selection and veer/back.
