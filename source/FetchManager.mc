@@ -30,8 +30,11 @@ class FetchManager {
     private var _pendingUnits as String = "";
     private var _pendingSlots as String = "";
 
-    // Look-ahead coordinate queue: [[latDeg, lonDeg], ...]
-    private var _laQueue as Array< Array<Double> >;
+    // Look-ahead coordinates (fixed slots, one per point)
+    private var _la1LatDeg as Double = 0.0d;
+    private var _la1LonDeg as Double = 0.0d;
+    private var _la2LatDeg as Double = 0.0d;
+    private var _la2LonDeg as Double = 0.0d;
 
     private var _lastModelRun as String = "";
     private var _lastModelCheckTime as Number = 0;
@@ -44,7 +47,6 @@ class FetchManager {
     var hasPosition as Boolean = false;
 
     function initialize() {
-        _laQueue = [] as Array< Array<Double> >;
     }
 
     //! Set the current slot count (called from WindForceView.onLayout).
@@ -119,16 +121,20 @@ class FetchManager {
         // Look-ahead points along current bearing (on distance trigger or first fetch)
         var bearing = info.currentHeading;
         if (bearing != null && (distanceTrigger || _lastFetchTime == 0)) {
-            _laQueue = [] as Array< Array<Double> >;
             var bearingD = (bearing as Float).toDouble();
-            for (var i = 1; i <= 2; i++) {
-                var distKm = (LOOK_AHEAD_DIST_KM * i).toDouble();
-                var pt = destinationPoint(latRad, lonRad, bearingD, distKm);
-                var laLatDeg = pt[0] * 180.0d / Math.PI;
-                var laLonDeg = pt[1] * 180.0d / Math.PI;
-                _laQueue.add([laLatDeg, laLonDeg] as Array<Double>);
-                ForecastService.fetchForecast(laLatDeg, laLonDeg, units, slots, method(:onLookAheadReceived));
-            }
+
+            // Point 1: 2.5 km ahead
+            var pt1 = destinationPoint(latRad, lonRad, bearingD, LOOK_AHEAD_DIST_KM.toDouble());
+            _la1LatDeg = pt1[0] * 180.0d / Math.PI;
+            _la1LonDeg = pt1[1] * 180.0d / Math.PI;
+            ForecastService.fetchForecast(_la1LatDeg, _la1LonDeg, units, slots, method(:onLookAhead1Received));
+
+            // Point 2: 5.0 km ahead
+            var distKm2 = (LOOK_AHEAD_DIST_KM * 2).toDouble();
+            var pt2 = destinationPoint(latRad, lonRad, bearingD, distKm2);
+            _la2LatDeg = pt2[0] * 180.0d / Math.PI;
+            _la2LonDeg = pt2[1] * 180.0d / Math.PI;
+            ForecastService.fetchForecast(_la2LatDeg, _la2LonDeg, units, slots, method(:onLookAhead2Received));
         }
     }
 
@@ -166,19 +172,20 @@ class FetchManager {
         WatchUi.requestUpdate();
     }
 
-    //! Callback for look-ahead forecast (best-effort).
-    //! Pops coordinates from the queue and stores via StorageManager.
-    function onLookAheadReceived(responseCode as Number, data as Dictionary or String or Null) as Void {
-        // Pop the first queued coordinate pair
-        var coordsDeg = null as Array<Double>?;
-        if (_laQueue.size() > 0) {
-            coordsDeg = _laQueue[0];
-            _laQueue = _laQueue.slice(1, null) as Array< Array<Double> >;
+    //! Callback for look-ahead point 1 (2.5 km ahead).
+    function onLookAhead1Received(responseCode as Number, data as Dictionary or String or Null) as Void {
+        if (responseCode == 200 && data instanceof Dictionary) {
+            var rLat = StorageManager.roundCoord(_la1LatDeg);
+            var rLon = StorageManager.roundCoord(_la1LonDeg);
+            StorageManager.storeForecast(rLat, rLon, data as Dictionary);
         }
+    }
 
-        if (responseCode == 200 && data instanceof Dictionary && coordsDeg != null) {
-            var rLat = StorageManager.roundCoord(coordsDeg[0]);
-            var rLon = StorageManager.roundCoord(coordsDeg[1]);
+    //! Callback for look-ahead point 2 (5.0 km ahead).
+    function onLookAhead2Received(responseCode as Number, data as Dictionary or String or Null) as Void {
+        if (responseCode == 200 && data instanceof Dictionary) {
+            var rLat = StorageManager.roundCoord(_la2LatDeg);
+            var rLon = StorageManager.roundCoord(_la2LonDeg);
             StorageManager.storeForecast(rLat, rLon, data as Dictionary);
         }
     }
