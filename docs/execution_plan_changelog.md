@@ -78,3 +78,6 @@
   2. Fixed position-blind forecast lookup: `findBestForecast()` now uses current GPS position via `FetchManager.currentLatDeg/Lon` to try `StorageManager.loadForecast()` (exact rounded match) first, then `StorageManager.loadNearestForecast()` (nearest within 2.5 km). Falls back to last stored entry only when no GPS fix available.
   3. Fixed look-ahead storage: look-ahead coordinates queued as `_laQueue` in `executeFetchCycle()` and consumed FIFO in `onLookAheadReceived()`. Data now stored via `StorageManager.storeForecast()` with proper rounded coordinates, enabling nearest-cache lookup and obeying the pruning limit.
   - PRG file size after fixes: 12.1 KB (release build).
+- Addressed code review v3 finding (`docs/code_review.v3.md`):
+  1. Fixed look-ahead callback-to-request matching: replaced FIFO queue + shared `onLookAheadReceived` with two dedicated coordinate slots (`_la1LatDeg/Lon`, `_la2LatDeg/Lon`) and two separate callbacks (`onLookAhead1Received`, `onLookAhead2Received`). Each callback uses its own pre-assigned coordinates regardless of completion order, eliminating the out-of-order corruption risk.
+  - PRG file size after fix: 12.3 KB (release build).
