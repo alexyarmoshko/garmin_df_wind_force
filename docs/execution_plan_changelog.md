@@ -90,3 +90,16 @@
 - Addressed code review v6 finding (`docs/code_review.v6.md`):
   1. Fixed `_lastModelRun` not initialized from forecast responses: `onForecastReceived()` now seeds `_lastModelRun` from the response's `model_run` field on non-stale success. This prevents the first `/model-status` poll after startup from forcing a redundant refetch when the cached forecast already came from the current model run.
   - PRG file size after fix: 12.2 KB (release build).
+
+## 2026-03-14
+
+- **Milestone 4 rework**: Discovered data fields cannot call `Communications.makeWebRequest()` directly — calls silently fail with no HTTP traffic, no callback, and no error. Rearchitected from direct-fetch to background service pattern.
+  - Deleted `source/ForecastService.mc` (module with direct `makeWebRequest` calls — no longer needed).
+  - Deleted `source/LookAheadCallback.mc` (look-ahead dispatch — deferred to future milestone).
+  - Created `source/WindForceServiceDelegate.mc` (`(:background)` annotated `System.ServiceDelegate`): reads GPS position from `Application.Storage`, calls `makeWebRequest` in `onTemporalEvent()`, returns data via `Background.exit()`.
+  - Rewrote `source/WindForceApp.mc` with `(:background)` annotation: `getServiceDelegate()`, `onBackgroundData()` to receive and store forecast data, `Background.registerForTemporalEvent()` with 5-minute Duration.
+  - Simplified `source/FetchManager.mc` to position tracking only: `updatePosition()` persists GPS lat/lon to Storage for the background service. Removed all direct web request logic, fetch triggers, Haversine, destination-point math.
+  - Added `Background` and `Positioning` permissions to `manifest.xml`.
+  - Hardcoded 3-slot forecast request in service delegate (Storage sync between main/background processes unreliable in simulator).
+  - End-to-end verified in simulator: GPS from GPX playback → background service fetches from CF Worker proxy → 3-slot wind data displayed correctly.
+  - Memory usage: 13.5/28.5kB.

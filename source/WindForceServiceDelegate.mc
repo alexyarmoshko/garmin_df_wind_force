@@ -1,0 +1,120 @@
+import Toybox.Application;
+import Toybox.Application.Storage;
+import Toybox.Background;
+import Toybox.Communications;
+import Toybox.Lang;
+import Toybox.Math;
+import Toybox.System;
+
+(:background)
+class WindForceServiceDelegate extends System.ServiceDelegate {
+
+    function initialize() {
+        ServiceDelegate.initialize();
+    }
+
+    //! Called when the background temporal event fires.
+    function onTemporalEvent() as Void {
+        // Read current position saved by compute()
+        var lat = Storage.getValue("bg_lat");
+        var lon = Storage.getValue("bg_lon");
+
+        if (lat == null || lon == null) {
+            // No position available yet — exit immediately
+            Background.exit({"kind" => "error", "rc" => -1} as Dictionary);
+            return;
+        }
+
+        var latDeg = (lat instanceof Double) ? lat as Double :
+                     (lat instanceof Float) ? (lat as Float).toDouble() : 0.0d;
+        var lonDeg = (lon instanceof Double) ? lon as Double :
+                     (lon instanceof Float) ? (lon as Float).toDouble() : 0.0d;
+
+        var units = getUnitsString();
+        var slots = getSlotsString();
+
+        var rLat = roundCoord(latDeg);
+        var rLon = roundCoord(lonDeg);
+
+        var url = "https://wind-force-proxy.alex-cc4.workers.dev/forecast";
+        var params = {
+            "lat" => latDeg.format("%.3f"),
+            "lon" => lonDeg.format("%.3f"),
+            "units" => units,
+            "slots" => slots
+        };
+        var options = {
+            :method => Communications.HTTP_REQUEST_METHOD_GET,
+            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+        };
+
+        // Store rounded coords so onBackgroundData knows the storage key
+        Storage.setValue("bg_rLat", rLat);
+        Storage.setValue("bg_rLon", rLon);
+
+        Communications.makeWebRequest(url, params, options, method(:onForecastReceived));
+    }
+
+    //! Callback for the forecast web request.
+    function onForecastReceived(responseCode as Number, data as Dictionary or String or Null) as Void {
+        if (responseCode == 200 && data instanceof Dictionary) {
+            var rLat = Storage.getValue("bg_rLat");
+            var rLon = Storage.getValue("bg_rLon");
+            Background.exit({
+                "kind" => "forecast",
+                "payload" => data,
+                "rLat" => (rLat instanceof String) ? rLat : "0.000",
+                "rLon" => (rLon instanceof String) ? rLon : "0.000"
+            } as Dictionary);
+        } else {
+            Background.exit({
+                "kind" => "error",
+                "rc" => responseCode
+            } as Dictionary);
+        }
+    }
+
+    //! Round a coordinate to the nearest 0.025 degrees.
+    private function roundCoord(value as Double) as String {
+        var rounded = Math.round(value / 0.025).toDouble() * 0.025;
+        return rounded.format("%.3f");
+    }
+
+    //! Read wind units setting.
+    private function getUnitsString() as String {
+        var val = Application.Properties.getValue("windUnits");
+        if (val instanceof Number) {
+            switch (val) {
+                case 1: return "knots";
+                case 2: return "mph";
+                case 3: return "kmh";
+                case 4: return "mps";
+            }
+        }
+        return "beaufort";
+    }
+
+    //! Build slots query parameter.
+    //! Note: bg_slotCount from Storage is unreliable in the background process
+    //! (simulator sync issue). Default to 3 slots for Instinct 2X large field.
+    private function getSlotsString() as String {
+        var i1 = getInterval(1);
+        var i2 = getInterval(2);
+        if (i2 <= i1) {
+            i2 = i1 + 1;
+            if (i2 > 6) { i2 = 6; }
+        }
+        return "0," + i1.toString() + "," + i2.toString();
+    }
+
+    //! Read a forecast interval setting.
+    private function getInterval(which as Number) as Number {
+        var key = (which == 1) ? "forecastInterval1" : "forecastInterval2";
+        var val = Application.Properties.getValue(key);
+        if (val instanceof Number && val >= 1 && val <= 6) {
+            return val;
+        }
+        return (which == 1) ? 3 : 6;
+    }
+
+}

@@ -33,6 +33,10 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - (2026-03-13) Monkey C modules cannot use `method(:name)` for callbacks (no `self`). FetchManager must be a class, not a module, because `Communications.makeWebRequest()` requires a method reference callback. DisplayRenderer and StorageManager remain modules (no callbacks needed).
 - (2026-03-13) Monkey C `const` float literals (e.g., `2.5`) are `Float`, not `Double`. When passing to functions expecting `Double`, must call `.toDouble()` explicitly.
 - (2026-03-13) PRG file size after Milestone 4: 11.6 KB (release build). Still ~20 KB headroom within the 32 KB limit.
+- (2026-03-14) **Connect IQ data fields cannot call `Communications.makeWebRequest()` directly.** The call silently does nothing — no HTTP traffic, no callback, no error. Data fields must use a background service (`System.ServiceDelegate`) registered via `Background.registerForTemporalEvent()`. This required a major architectural change from direct fetch in `compute()` to a background-service pattern.
+- (2026-03-14) The `Positioning` permission is required in the manifest for `Activity.Info.currentLocation` to return non-null values, even for data fields.
+- (2026-03-14) `Application.Storage` values set by the main process are not reliably readable by the background service process in the simulator. Slot count is now hardcoded to 3 (matching the Instinct 2X large data field) rather than passed via Storage.
+- (2026-03-14) The background temporal event minimum interval is 5 minutes. In the simulator, background events must be triggered manually via Simulation > Trigger Background Event.
 
 ## Decision Log
 
@@ -63,6 +67,10 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - Decision: Move unit conversion, direction labels, Beaufort lookup, slot selection, and veer/back computation from the watch to the proxy.
   Rationale: The Instinct 2X data field has a 32 KB memory limit. By performing unit conversion (Beaufort, knots, mph, km/h, m/s), Beaufort-scale lookup for gusts, cardinal direction labelling, forecast interval selection, and veer/back computation on the proxy, the watch-side code becomes a thin display layer: `DisplayRenderer` only concatenates pre-computed strings, and `WindData` stores display-ready values (`windSpeed`, `gustSpeed`, `windDir`, `veer`). The `/forecast` endpoint accepts `units` and `slots` query parameters and returns exactly the entries the watch needs to render, with all values pre-converted. When the user changes the wind unit or interval settings, the watch triggers a refetch with the new parameters rather than re-computing locally. This maximises memory savings on the watch at the cost of slightly more proxy logic and an extra network round-trip when settings change.
   Date/Author: 2026-03-13
+
+- Decision: Use background service (`System.ServiceDelegate`) for all web requests instead of calling `makeWebRequest()` from `compute()`.
+  Rationale: Connect IQ data fields cannot make direct HTTP requests — `Communications.makeWebRequest()` silently fails (no traffic, no callback). The background service pattern is mandatory: `Background.registerForTemporalEvent()` fires a `ServiceDelegate.onTemporalEvent()` every 5 minutes, which calls `makeWebRequest()` and returns data via `Background.exit()` → `AppBase.onBackgroundData()`. GPS position is persisted to `Application.Storage` by `compute()` so the background service can read it. This replaces the original FetchManager direct-fetch design, and removes the need for ForecastService module and LookAheadCallback class.
+  Date/Author: 2026-03-14
 
 ## Outcomes & Retrospective
 

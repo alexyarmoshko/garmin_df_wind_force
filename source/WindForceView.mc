@@ -4,7 +4,6 @@ import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.Math;
 import Toybox.Position;
-import Toybox.Time;
 import Toybox.WatchUi;
 
 class WindForceView extends WatchUi.DataField {
@@ -20,11 +19,10 @@ class WindForceView extends WatchUi.DataField {
 
     function onLayout(dc as Dc) as Void {
         _slots = DisplayRenderer.slotCount(dc.getWidth());
-        _fetchMgr.setSlotCount(_slots);
     }
 
     function compute(info as Activity.Info) as Void {
-        _fetchMgr.executeFetchCycle(info);
+        _fetchMgr.updatePosition(info);
     }
 
     function onUpdate(dc as Dc) as Void {
@@ -40,7 +38,7 @@ class WindForceView extends WatchUi.DataField {
         var fetchTs = Storage.getValue("last_fetch_ts");
         var ts = (fetchTs instanceof Number) ? fetchTs as Number : 0;
 
-        var text = DisplayRenderer.formatLayout(forecasts, ts);
+        var text = DisplayRenderer.formatLayout(forecasts, ts, _fetchMgr.hasPosition);
 
         var font = selectFont(dc, text);
 
@@ -59,7 +57,6 @@ class WindForceView extends WatchUi.DataField {
     private function loadCurrentForecasts() as Array<WindData> {
         var result = [] as Array<WindData>;
 
-        // Try to find forecast data in storage
         var dict = findBestForecast();
         if (dict == null) {
             return result;
