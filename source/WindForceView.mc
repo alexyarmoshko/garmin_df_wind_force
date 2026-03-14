@@ -34,9 +34,15 @@ class WindForceView extends WatchUi.DataField {
         dc.clear();
 
         // Load forecast data from storage for current position
-        var forecasts = loadCurrentForecasts();
-        var fetchTs = Storage.getValue("last_fetch_ts");
-        var ts = (fetchTs instanceof Number) ? fetchTs as Number : 0;
+        var dict = findBestForecast();
+        var forecasts = parseForecastEntries(dict);
+
+        // Use per-forecast fetch timestamp for staleness (not global)
+        var ts = 0;
+        if (dict != null) {
+            var fetchTs = (dict as Dictionary)["fetch_ts"];
+            if (fetchTs instanceof Number) { ts = fetchTs as Number; }
+        }
 
         var text = DisplayRenderer.formatLayout(forecasts, ts, _fetchMgr.hasPosition);
 
@@ -52,17 +58,16 @@ class WindForceView extends WatchUi.DataField {
         );
     }
 
-    //! Load forecasts for the current position from storage.
-    //! Falls back to nearest cached forecast if exact match unavailable.
-    private function loadCurrentForecasts() as Array<WindData> {
+    //! Parse forecast entries from a stored forecast dictionary.
+    //! @param dict The forecast dictionary from storage (may be null)
+    private function parseForecastEntries(dict as Dictionary?) as Array<WindData> {
         var result = [] as Array<WindData>;
 
-        var dict = findBestForecast();
         if (dict == null) {
             return result;
         }
 
-        var forecasts = dict["forecasts"];
+        var forecasts = (dict as Dictionary)["forecasts"];
         if (!(forecasts instanceof Array)) {
             return result;
         }
@@ -93,16 +98,10 @@ class WindForceView extends WatchUi.DataField {
     //! Find the best available forecast dictionary from storage.
     //! Uses current GPS position: tries exact rounded match first,
     //! then falls back to nearest cached grid point within 2.5 km.
+    //! Returns null when no GPS fix — avoids showing stale data from
+    //! a previous session or location.
     private function findBestForecast() as Dictionary? {
         if (!_fetchMgr.hasPosition) {
-            // No GPS yet — try last stored entry as fallback
-            var keys = StorageManager.getStoredKeys();
-            if (keys.size() > 0) {
-                var val = Storage.getValue(keys[keys.size() - 1]);
-                if (val instanceof Dictionary) {
-                    return val as Dictionary;
-                }
-            }
             return null;
         }
 

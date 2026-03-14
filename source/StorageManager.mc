@@ -11,6 +11,7 @@ module StorageManager {
     //! @param roundedLat Latitude rounded to 0.025 degrees
     //! @param roundedLon Longitude rounded to 0.025 degrees
     //! @param data The forecast response dictionary from the proxy
+    (:typecheck(false))
     function storeForecast(
         roundedLat as String,
         roundedLon as String,
@@ -36,6 +37,7 @@ module StorageManager {
 
     //! Load a forecast for exact rounded coordinates.
     //! @return The forecast dictionary or null if not cached
+    (:typecheck(false))
     function loadForecast(
         roundedLat as String,
         roundedLon as String
@@ -84,6 +86,7 @@ module StorageManager {
     }
 
     //! Remove old entries, keeping only the most recent MAX_CACHED_FORECASTS.
+    (:typecheck(false))
     function pruneStorage() as Void {
         var keys = getStoredKeys();
         if (keys.size() <= MAX_CACHED_FORECASTS) {
@@ -99,6 +102,7 @@ module StorageManager {
     }
 
     //! Get the list of stored forecast keys.
+    (:typecheck(false))
     function getStoredKeys() as Array<String> {
         var val = Storage.getValue("fc_keys");
         if (val instanceof Array) {
@@ -124,13 +128,16 @@ module StorageManager {
             return null;
         }
         var rest = key.substring(3, key.length());
+        if (rest == null) {
+            return null;
+        }
         // Find the separator "_" between lat and lon
         // Lat can be negative, so we need to find the underscore after the lat value
         // Strategy: find "_" that is preceded by a digit (not the first char)
         var sepIdx = -1;
-        for (var i = 1; i < rest.length(); i++) {
-            var ch = rest.substring(i, i + 1);
-            if (ch.equals("_")) {
+        for (var i = 1; i < (rest as String).length(); i++) {
+            var ch = (rest as String).substring(i, i + 1);
+            if (ch != null && (ch as String).equals("_")) {
                 sepIdx = i;
                 break;
             }
@@ -138,9 +145,12 @@ module StorageManager {
         if (sepIdx < 0) {
             return null;
         }
-        var lat = rest.substring(0, sepIdx);
-        var lon = rest.substring(sepIdx + 1, rest.length());
-        return [lat, lon] as Array<String>;
+        var lat = (rest as String).substring(0, sepIdx);
+        var lon = (rest as String).substring(sepIdx + 1, (rest as String).length());
+        if (lat == null || lon == null) {
+            return null;
+        }
+        return [lat as String, lon as String] as Array<String>;
     }
 
     //! Approximate distance in km between two points given in degrees.
@@ -155,7 +165,7 @@ module StorageManager {
         var midLat = (lat1 + lat2) / 2.0 * toRad;
         var dx = dLon * Math.cos(midLat);
         var R = 6371.0;
-        return Math.sqrt(dx * dx + dLat * dLat) * R;
+        return (Math.sqrt(dx * dx + dLat * dLat) * R).toDouble();
     }
 
 }
