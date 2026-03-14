@@ -13,9 +13,10 @@ Wind Force shows current and forecast wind conditions on your watch during a Kay
 Depending on the data field slot size, it displays 1 to 3 time slots so you can see how conditions are forecast to change over the next few hours.
 
 ```
-3(4)NE>        Single slot: speed 3, gust 4, NE, veering
-3(4)NE>5(6)S   Two slots: current + 3h forecast
-3(4)NE>5(6)S>3(5)SW   Three slots: current + 3h + 6h
+3(4)NE>          Single slot: speed 3, gust 4, NE, veering
+3(4)NE>5(6)S     Two slots: current + 3h forecast
+3(4)NE>5(6)S>3(5)SW  Three slots: current + 3h + 6h
+*3(4)NE>5(6)S    Stale data (>30 min old, prefixed with *)
 ```
 
 ## Architecture
