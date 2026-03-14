@@ -81,3 +81,12 @@
 - Addressed code review v3 finding (`docs/code_review.v3.md`):
   1. Fixed look-ahead callback-to-request matching: replaced FIFO queue + shared `onLookAheadReceived` with two dedicated coordinate slots (`_la1LatDeg/Lon`, `_la2LatDeg/Lon`) and two separate callbacks (`onLookAhead1Received`, `onLookAhead2Received`). Each callback uses its own pre-assigned coordinates regardless of completion order, eliminating the out-of-order corruption risk.
   - PRG file size after fix: 12.3 KB (release build).
+- Addressed code review v4 finding (`docs/code_review.v4.md`):
+  1. Fixed cross-cycle look-ahead coordinate corruption: replaced mutable shared coordinate slots (`_la1LatDeg/Lon`, `_la2LatDeg/Lon`) with a new `LookAheadCallback` class (`source/LookAheadCallback.mc`). Each look-ahead request creates its own `LookAheadCallback` instance that captures the coordinates immutably at dispatch time. The callback method `onReceived` uses the captured coordinates regardless of when the response arrives or whether a new fetch cycle has overwritten any shared state.
+  - PRG file size after fix: 12.2 KB (release build).
+- Addressed code review v5 finding (`docs/code_review.v5.md`):
+  1. Fixed model-run race between `/model-status` and in-flight `/forecast`: `onForecastReceived()` now compares the response's `model_run` against `_lastModelRun`. If the response carries an older model run (meaning `/model-status` detected a newer run while the request was in flight), the data is still stored (valid for display) but `_lastFetchTime` is not committed, so the next compute cycle retriggers a fetch with the new model run's data.
+  - PRG file size after fix: 12.3 KB (release build).
+- Addressed code review v6 finding (`docs/code_review.v6.md`):
+  1. Fixed `_lastModelRun` not initialized from forecast responses: `onForecastReceived()` now seeds `_lastModelRun` from the response's `model_run` field on non-stale success. This prevents the first `/model-status` poll after startup from forcing a redundant refetch when the cached forecast already came from the current model run.
+  - PRG file size after fix: 12.2 KB (release build).

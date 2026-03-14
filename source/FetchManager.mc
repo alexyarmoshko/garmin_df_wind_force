@@ -30,12 +30,6 @@ class FetchManager {
     private var _pendingUnits as String = "";
     private var _pendingSlots as String = "";
 
-    // Look-ahead coordinates (fixed slots, one per point)
-    private var _la1LatDeg as Double = 0.0d;
-    private var _la1LonDeg as Double = 0.0d;
-    private var _la2LatDeg as Double = 0.0d;
-    private var _la2LonDeg as Double = 0.0d;
-
     private var _lastModelRun as String = "";
     private var _lastModelCheckTime as Number = 0;
     private var _fetchInProgress as Boolean = false;
@@ -125,16 +119,18 @@ class FetchManager {
 
             // Point 1: 2.5 km ahead
             var pt1 = destinationPoint(latRad, lonRad, bearingD, LOOK_AHEAD_DIST_KM.toDouble());
-            _la1LatDeg = pt1[0] * 180.0d / Math.PI;
-            _la1LonDeg = pt1[1] * 180.0d / Math.PI;
-            ForecastService.fetchForecast(_la1LatDeg, _la1LonDeg, units, slots, method(:onLookAhead1Received));
+            var la1Lat = pt1[0] * 180.0d / Math.PI;
+            var la1Lon = pt1[1] * 180.0d / Math.PI;
+            var cb1 = new LookAheadCallback(la1Lat, la1Lon);
+            ForecastService.fetchForecast(la1Lat, la1Lon, units, slots, cb1.method(:onReceived));
 
             // Point 2: 5.0 km ahead
             var distKm2 = (LOOK_AHEAD_DIST_KM * 2).toDouble();
             var pt2 = destinationPoint(latRad, lonRad, bearingD, distKm2);
-            _la2LatDeg = pt2[0] * 180.0d / Math.PI;
-            _la2LonDeg = pt2[1] * 180.0d / Math.PI;
-            ForecastService.fetchForecast(_la2LatDeg, _la2LonDeg, units, slots, method(:onLookAhead2Received));
+            var la2Lat = pt2[0] * 180.0d / Math.PI;
+            var la2Lon = pt2[1] * 180.0d / Math.PI;
+            var cb2 = new LookAheadCallback(la2Lat, la2Lon);
+            ForecastService.fetchForecast(la2Lat, la2Lon, units, slots, cb2.method(:onReceived));
         }
     }
 
@@ -155,10 +151,21 @@ class FetchManager {
         _fetchInProgress = false;
         if (responseCode == 200 && data instanceof Dictionary) {
             var dict = data as Dictionary;
-            // Commit fetch state only on success
+
+            // Check if a newer model run was detected while this request
+            // was in flight. If so, this response may contain data from
+            // the old run — store it (it's still valid display data) but
+            // don't commit _lastFetchTime so the next cycle retriggers.
+            var responseModelRun = dict["model_run"];
+            var modelRunStale = false;
+            if (responseModelRun instanceof String &&
+                !_lastModelRun.equals("") &&
+                !_lastModelRun.equals(responseModelRun)) {
+                modelRunStale = true;
+            }
+
             _lastFetchLatRad = _pendingLatRad;
             _lastFetchLonRad = _pendingLonRad;
-            _lastFetchTime = Time.now().value();
             _lastFetchedUnits = _pendingUnits;
             _lastFetchedSlots = _pendingSlots;
 
@@ -167,27 +174,20 @@ class FetchManager {
             var rLat = StorageManager.roundCoord(latDeg);
             var rLon = StorageManager.roundCoord(lonDeg);
             StorageManager.storeForecast(rLat, rLon, dict);
-            Storage.setValue("last_fetch_ts", _lastFetchTime);
+
+            if (!modelRunStale) {
+                _lastFetchTime = Time.now().value();
+                Storage.setValue("last_fetch_ts", _lastFetchTime);
+                // Seed _lastModelRun so the next /model-status poll
+                // doesn't mistake the current run for a change.
+                if (responseModelRun instanceof String) {
+                    _lastModelRun = responseModelRun;
+                }
+            }
+            // If stale, _lastFetchTime stays at 0 (or its previous value),
+            // so the next compute cycle will retrigger a fetch.
         }
         WatchUi.requestUpdate();
-    }
-
-    //! Callback for look-ahead point 1 (2.5 km ahead).
-    function onLookAhead1Received(responseCode as Number, data as Dictionary or String or Null) as Void {
-        if (responseCode == 200 && data instanceof Dictionary) {
-            var rLat = StorageManager.roundCoord(_la1LatDeg);
-            var rLon = StorageManager.roundCoord(_la1LonDeg);
-            StorageManager.storeForecast(rLat, rLon, data as Dictionary);
-        }
-    }
-
-    //! Callback for look-ahead point 2 (5.0 km ahead).
-    function onLookAhead2Received(responseCode as Number, data as Dictionary or String or Null) as Void {
-        if (responseCode == 200 && data instanceof Dictionary) {
-            var rLat = StorageManager.roundCoord(_la2LatDeg);
-            var rLon = StorageManager.roundCoord(_la2LonDeg);
-            StorageManager.storeForecast(rLat, rLon, data as Dictionary);
-        }
     }
 
     //! Haversine distance (radians in, km out).
