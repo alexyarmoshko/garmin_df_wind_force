@@ -1,3 +1,11 @@
 <strings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
     <string id="AppName">Wind Force</string>
+    <string id="WindUnitsTitle">Wind Units</string>
+    <string id="Beaufort">Beaufort</string>
+    <string id="Knots">Knots</string>
+    <string id="Mph">mph</string>
+    <string id="Kmh">km/h</string>
+    <string id="Mps">m/s</string>
+    <string id="Interval1Title">Forecast Interval 1</string>
+    <string id="Interval2Title">Forecast Interval 2</string>
 </strings>

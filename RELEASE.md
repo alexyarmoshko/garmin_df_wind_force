@@ -7,6 +7,7 @@
 - **Background service communication** (Milestone 4 rework): Data field fetches live wind forecast data via a background `ServiceDelegate` that fires every 5 minutes. Direct `makeWebRequest()` from data fields is not supported by Connect IQ — background services are required.
 - **GPS position tracking**: `compute()` persists GPS coordinates to `Application.Storage` for the background service to read.
 - **Offline fallback**: Forecast data is persisted in `Application.Storage` and displayed when connectivity is unavailable. Nearest cached grid point within 2.5 km is used if exact match unavailable.
+- **User settings** (Milestone 5): Configurable via Garmin Connect Mobile or Garmin Express — wind units (Beaufort, Knots, mph, km/h, m/s), forecast interval 1 (1-6h), forecast interval 2 (1-6h). Changes invalidate cached forecasts and take effect on the next background fetch.
 - **Staleness indicator**: Prefixes display with `*` when data is older than 30 minutes (e.g., `*3(4)NE>5(6)S`).
 - **Display engine** (Milestone 3): Adaptive layout showing 1-3 time slots depending on data field width. Auto font sizing selects largest readable font.
 - **Cloudflare Worker proxy** (Milestone 2): Translates Met Eireann XML to compact JSON with KV caching. Supports unit conversion, slot selection, and veer/back computation server-side.

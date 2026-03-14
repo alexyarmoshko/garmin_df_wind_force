@@ -114,3 +114,15 @@
   1. Rewrote `docs/execution_plan.md` Milestone 4 and related interface sections to describe the implemented background-service architecture rather than the removed direct-fetch design.
   2. Updated `docs/execution_plan.md` Milestone 5 to build settings handling on top of `WindForceServiceDelegate` and added an explicit on-device validation step for `Application.Properties` propagation during an active activity.
   3. Documented the deferred status of look-ahead fetching in both `docs/execution_plan.md` and `docs/REQUIREMENTS.md`, so the current delivered behaviour and the future target behaviour are clearly separated.
+- **Milestone 5 initial implementation**: User settings UI.
+  - Created `resources/settings/settings.xml` with list-type settings for wind units (Beaufort/Knots/mph/km·h/m·s), forecast interval 1 (1-6h), and forecast interval 2 (1-6h).
+  - Added setting label strings to `resources/strings/strings.xml` (WindUnitsTitle, Beaufort, Knots, Mph, Kmh, Mps, Interval1Title, Interval2Title).
+  - Added `onSettingsChanged()` to `WindForceApp.mc` to refresh the display when settings change via Garmin Connect Mobile / Express. Data updates on the next background temporal event.
+  - Settings reading was already implemented in `WindForceServiceDelegate.mc` (`getUnitsString()`, `getInterval()`, `getSlotsString()`).
+  - Staleness indicator was already implemented in `DisplayRenderer.mc` (`*` prefix when data >30 min old).
+  - Strict build (`-l 3`) passes. PRG file size: 11.6 KB.
+- Addressed code review v10 and v11 findings (`docs/code_review.v10.md`, `docs/code_review.v11.md`):
+  1. Fixed cached forecasts rendered with wrong settings after unit/interval change: `onSettingsChanged()` now calls `StorageManager.clearAllForecasts()` to invalidate all cached forecast entries before requesting a redraw. Display shows `---` until the next background fetch completes with the new settings, preventing stale wrong-unit data from being displayed. New `clearAllForecasts()` method added to `StorageManager`.
+  2. Fixed duplicate slots when `forecastInterval1 = 6`: `getSlotsString()` now suppresses the third slot entirely when `interval2` would exceed 6, emitting `0,6` instead of `0,6,6`. Eliminates duplicate forecast entries and misleading veer symbols between identical time steps.
+  3. Fixed in-flight background responses repopulating cache after settings change: added `settings_ver` counter to `Application.Storage`. `onSettingsChanged()` increments the version; `WindForceServiceDelegate.onTemporalEvent()` captures it and includes it in the `Background.exit()` payload (`sv` field). `onBackgroundData()` compares the response version against the current version and discards mismatches. Even if Storage sync is delayed (background reads old version), the response is tagged with the old version and correctly rejected.
+  - PRG file size after fixes: 12.1 KB (release build).
