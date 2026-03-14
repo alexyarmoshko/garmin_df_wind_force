@@ -62,6 +62,11 @@ Forecast interval 2 must be greater than forecast interval 1. If the user sets t
 interval 2 less than interval 1, interval 2 should be clamped to interval 1 + 1h (or the
 maximum of 6h, whichever is smaller).
 
+Implementation note (2026-03-14):
+
+- The current background-service architecture reads these settings from `Application.Properties` in the service process.
+- This must be validated on a physical device during an active activity to confirm that settings changes propagate to the background service without requiring an activity restart.
+
 ## Architecture
 
 The watch cannot parse XML directly. A lightweight proxy backend translates the Met Éireann
@@ -131,6 +136,13 @@ same grid cells. The minimum useful spacing between fetch points is therefore ~2
 
 ### Fetch Points
 
+Implementation status note (2026-03-14):
+
+- The current Milestone 4 implementation had to pivot to a background service because Connect IQ data fields cannot call `makeWebRequest()` directly.
+- Current-position fetching and nearest-grid offline fallback are implemented.
+- Look-ahead fetching was deferred during the background-service rework and is not part of the current delivered behaviour.
+- The look-ahead behaviour described below remains desired follow-up scope unless it is formally re-prioritised.
+
 On each fetch cycle, the data field requests forecasts for:
 
 - **Current position** — the boat's current GPS location (always fetched)
@@ -146,6 +158,12 @@ reception, the previously fetched forecast for that approximate area is already 
 the watch and can be displayed.
 
 ### Fetch Triggers
+
+Implementation status note (2026-03-14):
+
+- The original design below describes distance/time/model-run driven fetches.
+- The current implementation uses a 5-minute background temporal event as the only fetch trigger, because foreground `compute()` cannot perform HTTP requests on this platform.
+- The model-run and look-ahead behaviour described below should therefore be treated as future target behaviour, not current delivered behaviour.
 
 Three independent triggers determine when the data field initiates a new fetch. Any one
 of them firing is sufficient.
