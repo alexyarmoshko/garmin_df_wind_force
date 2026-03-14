@@ -37,21 +37,21 @@ module DisplayRenderer {
             return "---";
         }
 
-        var result = renderWindSlot(forecasts[0]);
+        var result = "";
 
+        // Prefix with "*" when data is stale
+        if (fetchTimestamp > 0) {
+            var age = Time.now().value() - fetchTimestamp;
+            if (age > STALE_THRESHOLD_SEC) {
+                result = "*";
+            }
+        }
+
+        result += renderWindSlot(forecasts[0]);
         for (var i = 1; i < forecasts.size(); i++) {
             var v = forecasts[i].veer;
             result += (v != null) ? v : ">";
             result += renderWindSlot(forecasts[i]);
-        }
-
-        // Staleness indicator
-        if (fetchTimestamp > 0) {
-            var age = Time.now().value() - fetchTimestamp;
-            if (age > STALE_THRESHOLD_SEC) {
-                var ageMin = age / 60;
-                result += "*" + ageMin.toString() + "m";
-            }
         }
 
         return result;
