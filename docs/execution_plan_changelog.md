@@ -93,8 +93,8 @@
 
 ## 2026-03-14
 
-- **Milestone 4 rework**: Discovered data fields cannot call `Communications.makeWebRequest()` directly — calls silently fail with no HTTP traffic, no callback, and no error. Rearchitected from direct-fetch to background service pattern.
-  - Deleted `source/ForecastService.mc` (module with direct `makeWebRequest` calls — no longer needed).
+- **Milestone 4 rework**: Discovered data fields cannot call `Communications.makeWebRequest()` directly - calls silently fail with no HTTP traffic, no callback, and no error. Rearchitected from direct-fetch to background service pattern.
+  - Deleted `source/ForecastService.mc` (module with direct `makeWebRequest` calls - no longer needed).
   - Deleted `source/LookAheadCallback.mc` (look-ahead dispatch — deferred to future milestone).
   - Created `source/WindForceServiceDelegate.mc` (`(:background)` annotated `System.ServiceDelegate`): reads GPS position from `Application.Storage`, calls `makeWebRequest` in `onTemporalEvent()`, returns data via `Background.exit()`.
   - Rewrote `source/WindForceApp.mc` with `(:background)` annotation: `getServiceDelegate()`, `onBackgroundData()` to receive and store forecast data, `Background.registerForTemporalEvent()` with 5-minute Duration.
@@ -109,3 +109,7 @@
   3. Fixed proxy slot selection jumping slot 0 into the future after the half-hour mark: replaced single `selectEntry()` with `selectCurrentEntry()` (picks most recent entry at-or-before now) and `selectClosest()` (picks nearest to target timestamp). `buildResponse()` anchors slot 0 to the current hour, then offsets later slots from the current entry's time rather than `Date.now()`.
   4. Fixed strict Monkey C build (`-l 3`) regression: added `(:typecheck(false))` to methods referencing foreground-only symbols in `(:background)` classes (`getInitialView`, `onBackgroundData`), to `StorageManager` functions interacting with `Application.Storage` poly types (`storeForecast`, `loadForecast`, `pruneStorage`, `getStoredKeys`), and to `onForecastReceived` in the service delegate (framework `Dictionary` vs `PersistableType` mismatch). Fixed `splitFcKey` null safety (`substring()` returns nullable). Fixed `approxDistKm` return type (`Math.sqrt` returns `Double or Float`, added `.toDouble()`).
   - PRG file size after fixes: 11.4 KB (release build).
+- Addressed code review v9 findings (`docs/code_review.v9.md`):
+  1. Rewrote `docs/execution_plan.md` Milestone 4 and related interface sections to describe the implemented background-service architecture rather than the removed direct-fetch design.
+  2. Updated `docs/execution_plan.md` Milestone 5 to build settings handling on top of `WindForceServiceDelegate` and added an explicit on-device validation step for `Application.Properties` propagation during an active activity.
+  3. Documented the deferred status of look-ahead fetching in both `docs/execution_plan.md` and `docs/REQUIREMENTS.md`, so the current delivered behaviour and the future target behaviour are clearly separated.
