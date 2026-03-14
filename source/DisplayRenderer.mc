@@ -24,12 +24,17 @@ module DisplayRenderer {
     //! Build the full display string for the given forecasts.
     //! @param forecasts Array of WindData (may be empty)
     //! @param fetchTimestamp Unix epoch seconds of last successful fetch (0 if never)
+    //! @param hasPosition Whether GPS position is available
     function formatLayout(
         forecasts as Array<WindData>,
-        fetchTimestamp as Number
+        fetchTimestamp as Number,
+        hasPosition as Boolean
     ) as String {
         if (forecasts.size() == 0) {
-            return "?(?)? ?";
+            if (!hasPosition) {
+                return "NO GPS";
+            }
+            return "---";
         }
 
         var result = renderWindSlot(forecasts[0]);
@@ -54,7 +59,7 @@ module DisplayRenderer {
 
     //! Render a single time slot: "S(G)D"
     function renderWindSlot(data as WindData) as String {
-        return data.windSpeed + "(" + data.gustSpeed + ")" + data.windDir;
+        return data.windSpeed.toString() + "(" + data.gustSpeed.toString() + ")" + data.windDir;
     }
 
 }

@@ -7,7 +7,7 @@ A data field for Garmin Connect IQ that displays live wind forecast data during 
 Wind Force shows current and forecast wind conditions on your watch during a Kayak activity:
 
 - **Wind speed** and **gust speed** in your choice of units (Beaufort, Knots, mph, km/h, m/s)
-- **Wind direction** as a compass arrow
+- **Wind direction** as a cardinal compass label (N, NE, E, etc.)
 - **Veering/backing** indicator showing how the wind direction is shifting
 
 Depending on the data field slot size, it displays 1 to 3 time slots so you can see how conditions are forecast to change over the next few hours.
@@ -21,13 +21,23 @@ Depending on the data field slot size, it displays 1 to 3 time slots so you can 
 ## Architecture
 
 ```
-Watch (Kayak activity) --> Cloudflare Worker proxy --> Met Eireann HARMONIE API
-       ^                          |
-       |                     KV Cache
-       +-- Application.Storage (offline fallback)
+Watch (Kayak activity)
+  |  compute() saves GPS to Storage
+  v
+Background Service (every 5 min)
+  |  makeWebRequest()
+  v
+Cloudflare Worker proxy --> Met Eireann HARMONIE API
+  |                              |
+  +-- KV Cache                   +-- XML forecast data
+  |
+  v
+Watch (Application.Storage) --> Display
 ```
 
 The watch cannot parse XML directly. A lightweight Cloudflare Worker translates Met Eireann's XML forecasts into compact JSON (~300-500 bytes). Requests route through the paired phone's internet connection via Garmin Connect Mobile.
+
+Connect IQ data fields cannot make direct HTTP requests. A background service (`System.ServiceDelegate`) fires every 5 minutes, reads the current GPS position from `Application.Storage`, fetches forecast data from the proxy, and returns the response to the main process via `Background.exit()`.
 
 ## Data Source
 
@@ -46,6 +56,13 @@ garmin_df_wind_force/
   manifest.xml          # Connect IQ app manifest
   monkey.jungle         # Build configuration
   source/               # Monkey C source files
+    WindForceApp.mc      # App entry, background data handler
+    WindForceView.mc     # DataField view and rendering
+    WindForceServiceDelegate.mc  # Background service for HTTP
+    FetchManager.mc      # GPS position tracking
+    DisplayRenderer.mc   # Layout formatting
+    StorageManager.mc    # Forecast cache management
+    WindData.mc          # Forecast data model
   resources/            # Strings, settings, images
   proxy/                # Cloudflare Worker (TypeScript)
     src/                # Worker source code
@@ -66,6 +83,7 @@ garmin_df_wind_force/
 1. Open the project in VS Code
 2. `Ctrl+Shift+P` > **Monkey C: Build for Device** > select `instinct2x`
 3. `Ctrl+Shift+P` > **Monkey C: Run on Simulator**
+4. In the simulator: load a GPX file, start playback, then **Simulation > Trigger Background Event** to fetch data
 
 ### Proxy Development
 
