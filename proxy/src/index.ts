@@ -98,17 +98,33 @@ function parseSlots(slotsParam: string | null): number[] {
   return parts.slice(0, 3); // max 3 slots
 }
 
-/** Pick the raw entry whose time is closest to now + offsetHours. */
-function selectEntry(
-  forecasts: RawForecastEntry[],
-  offsetHours: number
+/** Find the "current" entry: the most recent entry at or before now.
+ *  Falls back to the earliest available entry if none is at-or-before now. */
+function selectCurrentEntry(
+  forecasts: RawForecastEntry[]
 ): RawForecastEntry | null {
   if (forecasts.length === 0) return null;
-  const target = Date.now() + offsetHours * 3600_000;
+  const now = Date.now();
+  let best: RawForecastEntry | null = null;
+  for (const entry of forecasts) {
+    const t = new Date(entry.time).getTime();
+    if (t <= now && (!best || t > new Date(best.time).getTime())) {
+      best = entry;
+    }
+  }
+  return best ?? forecasts[0];
+}
+
+/** Pick the entry whose time is closest to the given target timestamp. */
+function selectClosest(
+  forecasts: RawForecastEntry[],
+  targetMs: number
+): RawForecastEntry | null {
+  if (forecasts.length === 0) return null;
   let best = forecasts[0];
-  let bestDiff = Math.abs(new Date(best.time).getTime() - target);
+  let bestDiff = Math.abs(new Date(best.time).getTime() - targetMs);
   for (let i = 1; i < forecasts.length; i++) {
-    const diff = Math.abs(new Date(forecasts[i].time).getTime() - target);
+    const diff = Math.abs(new Date(forecasts[i].time).getTime() - targetMs);
     if (diff < bestDiff) {
       best = forecasts[i];
       bestDiff = diff;
@@ -117,16 +133,29 @@ function selectEntry(
   return best;
 }
 
-/** Select slots, convert units, compute direction labels and veer/back. */
+/** Select slots, convert units, compute direction labels and veer/back.
+ *  Slot 0 is anchored to the current hour (most recent entry at-or-before
+ *  now). Later slots are offset from the current entry's time, not from
+ *  Date.now(), so they stay aligned to hourly boundaries. */
 function buildResponse(
   raw: RawForecastResponse,
   unit: WindUnit,
   slots: number[]
 ): ForecastResponse {
+  const current = selectCurrentEntry(raw.forecasts);
+  if (!current) {
+    return { model_run: raw.model_run, units: unit, forecasts: [] };
+  }
+
+  const baseTime = new Date(current.time).getTime();
   const selected: RawForecastEntry[] = [];
   for (const offset of slots) {
-    const entry = selectEntry(raw.forecasts, offset);
-    if (entry) selected.push(entry);
+    if (offset === 0) {
+      selected.push(current);
+    } else {
+      const entry = selectClosest(raw.forecasts, baseTime + offset * 3600_000);
+      if (entry) selected.push(entry);
+    }
   }
 
   const forecasts: ForecastEntry[] = selected.map((entry, i) => ({

@@ -21,7 +21,7 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
 
         if (lat == null || lon == null) {
             // No position available yet — exit immediately
-            Background.exit({"kind" => "error", "rc" => -1} as Dictionary);
+            Background.exit({"kind" => "error", "rc" => -1});
             return;
         }
 
@@ -56,6 +56,9 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
     }
 
     //! Callback for the forecast web request.
+    // Framework types Dictionary and Background.exit(PersistableType) are
+    // incompatible at -l 3; safe at runtime.
+    (:typecheck(false))
     function onForecastReceived(responseCode as Number, data as Dictionary or String or Null) as Void {
         if (responseCode == 200 && data instanceof Dictionary) {
             var rLat = Storage.getValue("bg_rLat");
@@ -65,12 +68,12 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
                 "payload" => data,
                 "rLat" => (rLat instanceof String) ? rLat : "0.000",
                 "rLon" => (rLon instanceof String) ? rLon : "0.000"
-            } as Dictionary);
+            });
         } else {
             Background.exit({
                 "kind" => "error",
                 "rc" => responseCode
-            } as Dictionary);
+            });
         }
     }
 

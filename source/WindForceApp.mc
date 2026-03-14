@@ -20,6 +20,8 @@ class WindForceApp extends Application.AppBase {
         Background.deleteTemporalEvent();
     }
 
+    // Foreground-only: references WindForceView (not in background scope)
+    (:typecheck(false))
     function getInitialView() as [Views] or [Views, InputDelegates] {
         // Register background temporal event (5-min interval).
         // Using Duration means it fires immediately if >5 min since last run.
@@ -33,6 +35,8 @@ class WindForceApp extends Application.AppBase {
     }
 
     //! Called when the background service returns data.
+    // Foreground-only: references StorageManager and WatchUi (not in background scope)
+    (:typecheck(false))
     function onBackgroundData(data as Application.PersistableType) as Void {
         if (data instanceof Dictionary) {
             var dict = data as Dictionary;
@@ -44,8 +48,12 @@ class WindForceApp extends Application.AppBase {
                     var rLat = dict["rLat"];
                     var rLon = dict["rLon"];
                     if (rLat instanceof String && rLon instanceof String) {
-                        StorageManager.storeForecast(rLat, rLon, payload as Dictionary);
-                        Storage.setValue("last_fetch_ts", Time.now().value());
+                        // Stamp each forecast with its own fetch time so the
+                        // staleness indicator tracks the displayed data, not the
+                        // most recent fetch for any location.
+                        var payloadDict = payload as Dictionary;
+                        payloadDict.put("fetch_ts", Time.now().value());
+                        StorageManager.storeForecast(rLat, rLon, payloadDict);
 
                         var mr = (payload as Dictionary)["model_run"];
                         if (mr instanceof String) {
