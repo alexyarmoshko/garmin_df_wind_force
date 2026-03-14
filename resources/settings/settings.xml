@@ -1,0 +1,31 @@
+<settings>
+    <setting propertyKey="@Properties.windUnits" title="@Strings.WindUnitsTitle">
+        <settingConfig type="list">
+            <listEntry value="0">@Strings.Beaufort</listEntry>
+            <listEntry value="1">@Strings.Knots</listEntry>
+            <listEntry value="2">@Strings.Mph</listEntry>
+            <listEntry value="3">@Strings.Kmh</listEntry>
+            <listEntry value="4">@Strings.Mps</listEntry>
+        </settingConfig>
+    </setting>
+    <setting propertyKey="@Properties.forecastInterval1" title="@Strings.Interval1Title">
+        <settingConfig type="list">
+            <listEntry value="1">1h</listEntry>
+            <listEntry value="2">2h</listEntry>
+            <listEntry value="3">3h</listEntry>
+            <listEntry value="4">4h</listEntry>
+            <listEntry value="5">5h</listEntry>
+            <listEntry value="6">6h</listEntry>
+        </settingConfig>
+    </setting>
+    <setting propertyKey="@Properties.forecastInterval2" title="@Strings.Interval2Title">
+        <settingConfig type="list">
+            <listEntry value="1">1h</listEntry>
+            <listEntry value="2">2h</listEntry>
+            <listEntry value="3">3h</listEntry>
+            <listEntry value="4">4h</listEntry>
+            <listEntry value="5">5h</listEntry>
+            <listEntry value="6">6h</listEntry>
+        </settingConfig>
+    </setting>
+</settings>

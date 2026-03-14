@@ -85,6 +85,16 @@ module StorageManager {
         return null;
     }
 
+    //! Clear all cached forecasts (e.g., after settings change).
+    (:typecheck(false))
+    function clearAllForecasts() as Void {
+        var keys = getStoredKeys();
+        for (var i = 0; i < keys.size(); i++) {
+            Storage.deleteValue(keys[i]);
+        }
+        Storage.setValue("fc_keys", [] as Array<String>);
+    }
+
     //! Remove old entries, keeping only the most recent MAX_CACHED_FORECASTS.
     (:typecheck(false))
     function pruneStorage() as Void {

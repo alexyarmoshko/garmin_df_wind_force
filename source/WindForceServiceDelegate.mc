@@ -9,12 +9,20 @@ import Toybox.System;
 (:background)
 class WindForceServiceDelegate extends System.ServiceDelegate {
 
+    // Settings version captured at request time, included in Background.exit()
+    // so the foreground can reject responses from before a settings change.
+    private var _settingsVer as Number = 0;
+
     function initialize() {
         ServiceDelegate.initialize();
     }
 
     //! Called when the background temporal event fires.
     function onTemporalEvent() as Void {
+        // Capture settings version so the foreground can detect stale responses
+        var sv = Storage.getValue("settings_ver");
+        _settingsVer = (sv instanceof Number) ? sv as Number : 0;
+
         // Read current position saved by compute()
         var lat = Storage.getValue("bg_lat");
         var lon = Storage.getValue("bg_lon");
@@ -67,7 +75,8 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
                 "kind" => "forecast",
                 "payload" => data,
                 "rLat" => (rLat instanceof String) ? rLat : "0.000",
-                "rLon" => (rLon instanceof String) ? rLon : "0.000"
+                "rLon" => (rLon instanceof String) ? rLon : "0.000",
+                "sv" => _settingsVer
             });
         } else {
             Background.exit({
@@ -105,7 +114,11 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
         var i2 = getInterval(2);
         if (i2 <= i1) {
             i2 = i1 + 1;
-            if (i2 > 6) { i2 = 6; }
+        }
+        // When no valid third slot exists (i1=6 pushes i2 past max),
+        // emit only 2 slots to avoid duplicate entries.
+        if (i2 > 6) {
+            return "0," + i1.toString();
         }
         return "0," + i1.toString() + "," + i2.toString();
     }
