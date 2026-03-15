@@ -8,15 +8,14 @@ Wind Force shows current and forecast wind conditions on your watch during a Kay
 
 - **Wind speed** and **gust speed** in your choice of units (Beaufort, Knots, mph, km/h, m/s)
 - **Wind direction** as a cardinal compass label (N, NE, E, etc.)
-- **Veering/backing** indicator showing how the wind direction is shifting
 
 Depending on the data field slot size, it displays 1 to 3 time slots so you can see how conditions are forecast to change over the next few hours.
 
 ```
-3/4NE>            Single slot: speed 3, gust 4, NE, veering
-3/4NE>5/6S        Two slots: current + 3h forecast
-3/4NE>5/6S>3/5SW  Three slots: current + 3h + 6h
-*3/4NE>5/6S       Stale data (>30 min old, prefixed with *)
+3/4NE             Single slot: speed 3, gust 4, NE
+3/4NE<5/6S        Two slots: current + 3h forecast
+3/4NE<5/6S<3/5SW  Three slots: current + 3h + 6h
+*3/4NE<5/6S       Stale data (>30 min old, prefixed with *)
 ```
 
 Slot count adapts dynamically — if the text overflows the field width even at the smallest font, slots are reduced until it fits.

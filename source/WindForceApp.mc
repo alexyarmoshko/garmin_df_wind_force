@@ -35,12 +35,6 @@ class WindForceApp extends Application.AppBase {
     // Foreground-only: references StorageManager and WatchUi (not in background scope)
     (:typecheck(false))
     function onSettingsChanged() as Void {
-        // Bump settings version so in-flight background responses fetched
-        // under old settings are rejected by onBackgroundData().
-        var ver = Storage.getValue("settings_ver");
-        var newVer = (ver instanceof Number) ? (ver as Number) + 1 : 1;
-        Storage.setValue("settings_ver", newVer);
-
         StorageManager.clearAllForecasts();
         WatchUi.requestUpdate();
     }
@@ -48,6 +42,36 @@ class WindForceApp extends Application.AppBase {
     //! Return the service delegate for background web requests.
     function getServiceDelegate() as [System.ServiceDelegate] {
         return [new WindForceServiceDelegate()];
+    }
+
+    //! Compute the current wind-units string from Application.Properties.
+    //! Mirrors WindForceServiceDelegate.getUnitsString() so the foreground
+    //! can validate that a background response used the current settings.
+    private function _currentUnitsString() as String {
+        var val = Application.Properties.getValue("windUnits");
+        if (val instanceof Number) {
+            switch (val as Number) {
+                case 1: return "knots";
+                case 2: return "mph";
+                case 3: return "kmh";
+                case 4: return "mps";
+            }
+        }
+        return "beaufort";
+    }
+
+    //! Compute the current slots string from Application.Properties.
+    //! Mirrors WindForceServiceDelegate.getSlotsString().
+    private function _currentSlotsString() as String {
+        var i1v = Application.Properties.getValue("forecastInterval1");
+        var i2v = Application.Properties.getValue("forecastInterval2");
+        var i1 = (i1v instanceof Number && (i1v as Number) >= 1 && (i1v as Number) <= 6) ? i1v as Number : 3;
+        var i2 = (i2v instanceof Number && (i2v as Number) >= 1 && (i2v as Number) <= 6) ? i2v as Number : 6;
+        if (i2 <= i1) { i2 = i1 + 1; }
+        if (i2 > 6) {
+            return "0," + i1.toString();
+        }
+        return "0," + i1.toString() + "," + i2.toString();
     }
 
     //! Called when the background service returns data.
@@ -59,16 +83,19 @@ class WindForceApp extends Application.AppBase {
             var kind = dict["kind"];
 
             if ("forecast".equals(kind)) {
-                // Reject responses fetched under old settings (in-flight
-                // during a settings change). Version 0 = no change yet.
-                var responseSv = dict["sv"];
-                var curSv = Storage.getValue("settings_ver");
-                var rVer = (responseSv instanceof Number) ? responseSv as Number : 0;
-                var cVer = (curSv instanceof Number) ? curSv as Number : 0;
-                if (rVer != cVer) {
-                    // Stale settings — discard payload, still refresh display
-                    WatchUi.requestUpdate();
-                    return;
+                // Reject responses fetched under stale settings by comparing
+                // the actual units/slots used in the request against current
+                // Application.Properties values. This eliminates the race
+                // where Storage and Properties sync at different times.
+                var rUnits = dict["reqUnits"];
+                var rSlots = dict["reqSlots"];
+                if (rUnits instanceof String && rSlots instanceof String) {
+                    var curUnits = _currentUnitsString();
+                    var curSlots = _currentSlotsString();
+                    if (!curUnits.equals(rUnits) || !curSlots.equals(rSlots)) {
+                        WatchUi.requestUpdate();
+                        return;
+                    }
                 }
 
                 var payload = dict["payload"];

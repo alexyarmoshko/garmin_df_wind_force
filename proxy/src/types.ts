@@ -17,10 +17,10 @@ export interface ForecastEntry {
   wind_speed: number;
   gust_speed: number;
   wind_dir: string;
-  veer: string | null;
 }
 
 export interface ForecastResponse {
+  api_version: string;
   model_run: string;
   units: string;
   forecasts: ForecastEntry[];
@@ -32,5 +32,6 @@ export interface RawForecastResponse {
 }
 
 export interface ModelStatusResponse {
+  api_version: string;
   model_run: string;
 }

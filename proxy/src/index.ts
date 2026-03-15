@@ -7,6 +7,7 @@ import {
 } from "./types";
 import { fetchAndParseForecast, fetchModelRunTimestamp } from "./met-eireann";
 
+const API_VERSION = "v1";
 const FORECAST_TTL = 25_200; // 7 hours
 const MODEL_STATUS_TTL = 900; // 15 minutes
 
@@ -76,16 +77,6 @@ function degToCardinal(deg: number): string {
   return DIRECTION_LABELS[idx];
 }
 
-// ── Veer/back ─────────────────────────────────────────────────────────
-
-function veerSymbol(deg1: number, deg2: number): string {
-  let diff = deg2 - deg1;
-  // Normalize to -180..180
-  while (diff > 180) diff -= 360;
-  while (diff < -180) diff += 360;
-  return diff >= 0 ? ">" : "<";
-}
-
 // ── Slot selection ────────────────────────────────────────────────────
 
 function parseSlots(slotsParam: string | null): number[] {
@@ -133,7 +124,7 @@ function selectClosest(
   return best;
 }
 
-/** Select slots, convert units, compute direction labels and veer/back.
+/** Select slots, convert units, and compute direction labels.
  *  Slot 0 is anchored to the current hour (most recent entry at-or-before
  *  now). Later slots are offset from the current entry's time, not from
  *  Date.now(), so they stay aligned to hourly boundaries. */
@@ -144,7 +135,7 @@ function buildResponse(
 ): ForecastResponse {
   const current = selectCurrentEntry(raw.forecasts);
   if (!current) {
-    return { model_run: raw.model_run, units: unit, forecasts: [] };
+    return { api_version: API_VERSION, model_run: raw.model_run, units: unit, forecasts: [] };
   }
 
   const baseTime = new Date(current.time).getTime();
@@ -158,18 +149,17 @@ function buildResponse(
     }
   }
 
-  const forecasts: ForecastEntry[] = selected.map((entry, i) => ({
+  const forecasts: ForecastEntry[] = selected.map((entry) => ({
     time: entry.time,
     wind_speed: convertMps(entry.wind_mps, unit),
     gust_speed: convertMps(entry.gust_mps, unit),
     wind_dir: degToCardinal(entry.wind_deg),
-    veer: i === 0 ? null : veerSymbol(selected[i - 1].wind_deg, entry.wind_deg),
   }));
 
-  return { model_run: raw.model_run, units: unit, forecasts };
+  return { api_version: API_VERSION, model_run: raw.model_run, units: unit, forecasts };
 }
 
-// ── /forecast ─────────────────────────────────────────────────────────
+// ── /v1/forecast ──────────────────────────────────────────────────────
 
 async function handleForecast(url: URL, env: Env): Promise<Response> {
   const latParam = url.searchParams.get("lat");
@@ -247,12 +237,12 @@ async function handleForecast(url: URL, env: Env): Promise<Response> {
   return jsonResponse(response);
 }
 
-// ── /model-status ─────────────────────────────────────────────────────
+// ── /v1/model-status ──────────────────────────────────────────────────
 
 async function handleModelStatus(env: Env): Promise<Response> {
   const cached = await env.FORECAST_CACHE.get("latest_model_run");
   if (cached) {
-    return jsonResponse({ model_run: cached });
+    return jsonResponse({ api_version: API_VERSION, model_run: cached });
   }
 
   const modelRun = await fetchModelRunTimestamp();
@@ -260,7 +250,7 @@ async function handleModelStatus(env: Env): Promise<Response> {
     expirationTtl: MODEL_STATUS_TTL,
   });
 
-  return jsonResponse({ model_run: modelRun });
+  return jsonResponse({ api_version: API_VERSION, model_run: modelRun });
 }
 
 // ── Worker entry point ────────────────────────────────────────────────
@@ -284,9 +274,9 @@ export default {
     }
 
     switch (url.pathname) {
-      case "/forecast":
+      case "/v1/forecast":
         return handleForecast(url, env);
-      case "/model-status":
+      case "/v1/model-status":
         return handleModelStatus(env);
       default:
         return errorResponse("Not found", 404);

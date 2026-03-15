@@ -24,29 +24,24 @@ Per-point response fields used by this data field: `windSpeed` (mps, beaufort), 
 ## Field Structure/Layouts
 
 ```text
-S(G)[↑|↗|→|↘|↓|↙|←|↖][⟲|⟳]
-S1(G1)[↑|↗|→|↘|↓|↙|←|↖][⟲|⟳]S2(G2)[↑|↗|→|↘|↓|↙|←|↖]
-S1(G1)[↑|↗|→|↘|↓|↙|←|↖][⟲|⟳]S2(G2)[↑|↗|→|↘|↓|↙|←|↖][⟲|⟳]S3(G3)[↑|↗|→|↘|↓|↙|←|↖]
+W/GD
+W1/G1D1<W2/G2D2
+W1/G1D1<W2/G2D2<W3/G3D3
 
 Examples:
 
-3(4)↗⟳
-3(4)↗⟳5(6)↓
-3(4)↗⟳5(6)↓⟳3(5)↙
+3/4NE
+3/4NE<5/6S
+3/4NE<5/6S<3/5SW
 ```
 
-S - wind speed (Beaufort Scale|Knots|mp/h|km/h|m/s)
+W - wind speed (Beaufort Scale|Knots|mp/h|km/h|m/s)
 G - wind gust speed (Beaufort Scale|Knots|mp/h|km/h|m/s)
-`↑|↗|→|↘|↓|↙|←|↖` - wind direction (rounded to the nearest 0,45,90,135,180,225,270,315,360 degree; 0 == 360).
-
-`⟲|⟳` - veering (⟳, clockwise shift) or backing (⟲, anticlockwise shift) between adjacent time slots.
+D - wind direction as cardinal/intercardinal label (N, NE, E, SE, S, SW, W, NW)
+`<` - literal separator between adjacent time slots
 
 The layout shown depends on the data field position selected by the user on the activity screen.
-All layouts occupy a single line. When more than one time slot is displayed, the veering/backing
-symbol between slots indicates the directional change from the earlier slot to the later one.
-
-When only a single time slot is displayed (1-value layout), the veering/backing symbol indicates
-the directional change between the current observation and the next configured forecast interval.
+All layouts occupy a single line.
 
 ## User Configuration
 
@@ -59,8 +54,9 @@ The following settings are configurable by the user via Garmin Connect Mobile or
 | Forecast interval 2 (S3) | 1h, 2h, 3h, 4h, 5h, 6h | 6h |
 
 Forecast interval 2 must be greater than forecast interval 1. If the user sets them equal or
-interval 2 less than interval 1, interval 2 should be clamped to interval 1 + 1h (or the
-maximum of 6h, whichever is smaller).
+interval 2 less than interval 1, the service clamps interval 2 to interval 1 + 1h. If the
+clamped value exceeds 6h, the third time slot is suppressed entirely and only two slots are
+displayed.
 
 Implementation note (2026-03-14):
 
@@ -92,21 +88,24 @@ Hosted on Cloudflare Workers free tier (100,000 requests/day, KV storage include
 
 **Endpoints:**
 
-`GET /forecast?lat={lat}&lon={lon}`
+`GET /v1/forecast?lat={lat}&lon={lon}&units={units}&slots={slots}`
 - Rounds coordinates to the nearest ~0.025° (~2.5 km) to maximise cache hits and match
   the HARMONIE model grid resolution
-- Returns JSON containing hourly wind data for the next 6 hours:
+- `units`: `beaufort` (default), `knots`, `mph`, `kmh`, `mps`
+- `slots`: comma-separated hour offsets (e.g., `0,3,6`; max 3; default `0`)
+- Returns JSON with pre-converted wind data for the requested time slots:
 
 ```json
 {
+  "api_version": "v1",
   "model_run": "2026-03-12T06:00:00Z",
+  "units": "beaufort",
   "forecasts": [
     {
       "time": "2026-03-12T10:00:00Z",
-      "wind_mps": 7.2,
-      "wind_deg": 195,
-      "wind_beaufort": 4,
-      "gust_mps": 11.3
+      "wind_speed": 4,
+      "gust_speed": 6,
+      "wind_dir": "SSW"
     }
   ]
 }
@@ -115,7 +114,7 @@ Hosted on Cloudflare Workers free tier (100,000 requests/day, KV storage include
 - KV cache key: `{rounded_lat}_{rounded_lon}_{model_run}`
 - KV TTL: 7 hours (model run interval is 6h, with buffer)
 
-`GET /model-status`
+`GET /v1/model-status`
 - Returns the timestamp of the latest model run available (~50 bytes)
 - Used by the watch to cheaply detect whether cached data is stale
 
@@ -172,7 +171,7 @@ of them firing is sufficient.
 |---|---|---|
 | **Distance** | Boat has moved >1.5 km from the position of the last fetch | Current position + look-ahead points along current bearing |
 | **Time** | >30 minutes since the last successful fetch | Current position only (re-fetch at same location to get latest hourly slot) |
-| **Model run** | `/model-status` reports a newer model run than the one in cache | Current position + look-ahead points (all cached data is from the old run) |
+| **Model run** | `/v1/model-status` reports a newer model run than the one in cache | Current position + look-ahead points (all cached data is from the old run) |
 
 The model-status check is lightweight (~50 bytes) and should be performed before each full
 forecast fetch to avoid unnecessary requests when the model run has not changed. It can also
@@ -183,10 +182,10 @@ while stationary.
 
 On each fetch cycle:
 
-1. Call `/model-status` to get current model run timestamp
+1. Call `/v1/model-status` to get current model run timestamp
 2. If model run matches cached data and neither distance nor time trigger has fired, do nothing
-3. Otherwise, call `/forecast?lat={lat}&lon={lon}` for the current position
-4. If connectivity permits, call `/forecast` for each look-ahead point
+3. Otherwise, call `/v1/forecast?lat={lat}&lon={lon}` for the current position
+4. If connectivity permits, call `/v1/forecast` for each look-ahead point
 5. Store all responses in `Application.Storage` keyed by rounded grid coordinates
 6. Update the display with the current position's data
 
@@ -206,18 +205,15 @@ When the activity starts and the data field initialises:
 
 ### Unavailable Data Display
 
-When data is unavailable for any value (no cached data, fetch failed, no GPS fix yet),
-`?` is shown in place of that value. For example: `?(?)? ?` for a single-slot layout with
-no data at all, or `3(4)↗ ⟳ ?(?)? ` if the current slot has data but the forecast slot
-does not.
+When no GPS fix is available, the field displays `NO GPS`. When GPS is available but no
+forecast is cached for the current or nearest grid point, the field displays `---`.
 
 ## Staleness and Connectivity Loss
 
 ### Staleness Indicator
 
-When the displayed data is older than 30 minutes, a staleness indicator should be shown.
-This could be an asterisk (`*`) appended to the display, or the age in minutes (e.g. `47m`)
-if screen space permits.
+When the displayed data is older than 30 minutes, the display is prefixed with `*`
+(e.g., `*3/4NE<5/6S`).
 
 ### Connectivity Loss Behaviour
 

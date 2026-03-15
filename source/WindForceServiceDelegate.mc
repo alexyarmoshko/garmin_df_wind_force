@@ -9,9 +9,10 @@ import Toybox.System;
 (:background)
 class WindForceServiceDelegate extends System.ServiceDelegate {
 
-    // Settings version captured at request time, included in Background.exit()
-    // so the foreground can reject responses from before a settings change.
-    private var _settingsVer as Number = 0;
+    // Settings strings captured at request time, included in Background.exit()
+    // so the foreground can reject responses fetched under stale settings.
+    private var _requestedUnits as String = "";
+    private var _requestedSlots as String = "";
 
     function initialize() {
         ServiceDelegate.initialize();
@@ -19,10 +20,6 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
 
     //! Called when the background temporal event fires.
     function onTemporalEvent() as Void {
-        // Capture settings version so the foreground can detect stale responses
-        var sv = Storage.getValue("settings_ver");
-        _settingsVer = (sv instanceof Number) ? sv as Number : 0;
-
         // Read current position saved by compute()
         var lat = Storage.getValue("bg_lat");
         var lon = Storage.getValue("bg_lon");
@@ -41,10 +38,15 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
         var units = getUnitsString();
         var slots = getSlotsString();
 
+        // Capture for inclusion in Background.exit() so the foreground
+        // can reject responses fetched under stale settings.
+        _requestedUnits = units;
+        _requestedSlots = slots;
+
         var rLat = roundCoord(latDeg);
         var rLon = roundCoord(lonDeg);
 
-        var url = "https://wind-force-proxy.alex-cc4.workers.dev/forecast";
+        var url = "https://wind-force-proxy.alex-cc4.workers.dev/v1/forecast";
         var params = {
             "lat" => latDeg.format("%.3f"),
             "lon" => lonDeg.format("%.3f"),
@@ -76,7 +78,8 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
                 "payload" => data,
                 "rLat" => (rLat instanceof String) ? rLat : "0.000",
                 "rLon" => (rLon instanceof String) ? rLon : "0.000",
-                "sv" => _settingsVer
+                "reqUnits" => _requestedUnits,
+                "reqSlots" => _requestedSlots
             });
         } else {
             Background.exit({

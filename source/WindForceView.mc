@@ -92,13 +92,11 @@ class WindForceView extends WatchUi.DataField {
                 var ws = d["wind_speed"];
                 var gs = d["gust_speed"];
                 var wd = d["wind_dir"];
-                var v = d["veer"];
                 result.add(new WindData(
                     (d["time"] instanceof String) ? d["time"] as String : "",
                     (ws instanceof Number) ? ws as Number : 0,
                     (gs instanceof Number) ? gs as Number : 0,
-                    (wd instanceof String) ? wd as String : "?",
-                    (v instanceof String) ? v as String : null
+                    (wd instanceof String) ? wd as String : "?"
                 ));
             }
         }

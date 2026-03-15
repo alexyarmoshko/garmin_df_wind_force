@@ -4,7 +4,7 @@ This Execution Plan is a living document. The sections Progress, Surprises & Dis
 
 ## Purpose / Big Picture
 
-After this work is complete, a kayaker wearing a Garmin Instinct 2X Solar will be able to add a "Wind Force" data field to their Kayak activity screen. During a paddle, the field will display the current wind speed (in Beaufort or other units), gust speed, wind direction (as an arrow), and whether the wind is veering or backing, all derived from Met Eireann's HARMONIE weather model. Depending on the data field slot size chosen by the user, the display shows one, two, or three time slots so the paddler can see how conditions are forecast to change over the next few hours.
+After this work is complete, a kayaker wearing a Garmin Instinct 2X Solar will be able to add a "Wind Force" data field to their Kayak activity screen. During a paddle, the field will display the current wind speed (in Beaufort or other units), gust speed, and wind direction (as a cardinal compass label), all derived from Met Eireann's HARMONIE weather model. Depending on the data field slot size chosen by the user, the display shows one, two, or three time slots separated by `<`, so the paddler can see how conditions are forecast to change over the next few hours.
 
 The data flows from Met Eireann's XML API through a Cloudflare Worker proxy (which translates XML to compact JSON and caches results) to the watch via the paired phone's internet connection. When connectivity is lost, previously fetched data is displayed with a staleness indicator. Nearest-grid offline fallback is implemented now; look-ahead caching was deferred after the background-service rework and remains planned follow-up work.
 
@@ -16,7 +16,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - [x] (2026-03-12) Milestone 2: Cloudflare Worker proxy with Met Eireann XML-to-JSON translation
 - [x] (2026-03-13) Milestone 3: Data field display engine (rendering, layouts, unit conversions)
 - [x] (2026-03-13) Milestone 4: Communication layer and fetch strategy
-- [ ] (2026-03-12) Milestone 5: User settings and staleness handling
+- [x] (2026-03-15) Milestone 5: User settings and staleness handling
 - [ ] (2026-03-12) Milestone 6: Integration testing, optimisation, and deployment
 - [x] (2026-03-12) Plan review v1: addressed all 5 findings (Wrangler syntax, model-status polling, radians, properties.xml, PLANS.md compliance)
 
@@ -47,7 +47,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
   Date/Author: 2026-03-12
 
 - Decision: Use `WatchUi.DataField` (not `SimpleDataField`) for the view class.
-  Rationale: `SimpleDataField` only returns a single value for display. The wind force field needs a custom multi-segment layout with arrows, parenthesised gusts, and veering/backing symbols. `WatchUi.DataField` provides `onLayout(dc)` and `onUpdate(dc)` for full drawing control.
+  Rationale: `SimpleDataField` only returns a single value for display. The wind force field needs a custom multi-segment layout with direction labels and multi-slot formatting. `WatchUi.DataField` provides `onLayout(dc)` and `onUpdate(dc)` for full drawing control.
   Date/Author: 2026-03-12
 
 - Decision: Use TypeScript for the Cloudflare Worker.
@@ -62,12 +62,12 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
   Rationale: `Activity.Info.currentHeading` and `Activity.Info.currentLocation` (via `Position.Location`) both use radians natively. Converting to degrees for internal math would introduce unnecessary conversions and risk unit-mismatch bugs. The proxy API expects degrees in query parameters, so conversion happens only at the HTTP call boundary. Confirmed in SDK docs at `doc/Toybox/Activity/Info.html`.
   Date/Author: 2026-03-12
 
-- Decision: Poll `/model-status` at most once every 15 minutes, not on every compute cycle.
+- Decision: Poll `/v1/model-status` at most once every 15 minutes, not on every compute cycle.
   Rationale: `compute()` fires roughly once per second. Polling the proxy on every cycle would waste battery, generate excessive network traffic, and conflict with the requirements (REQUIREMENTS.md line 159-162 describes lower-frequency polling). A 15-minute interval matches the KV TTL on the proxy side and is sufficient to detect new model runs promptly.
   Date/Author: 2026-03-12
 
-- Decision: Move unit conversion, direction labels, Beaufort lookup, slot selection, and veer/back computation from the watch to the proxy.
-  Rationale: The Instinct 2X data field has a 32 KB memory limit. By performing unit conversion (Beaufort, knots, mph, km/h, m/s), Beaufort-scale lookup for gusts, cardinal direction labelling, forecast interval selection, and veer/back computation on the proxy, the watch-side code becomes a thin display layer: `DisplayRenderer` only concatenates pre-computed strings, and `WindData` stores display-ready values (`windSpeed`, `gustSpeed`, `windDir`, `veer`). The `/forecast` endpoint accepts `units` and `slots` query parameters and returns exactly the entries the watch needs to render, with all values pre-converted. When the user changes the wind unit or interval settings, the watch triggers a refetch with the new parameters rather than re-computing locally. This maximises memory savings on the watch at the cost of slightly more proxy logic and an extra network round-trip when settings change.
+- Decision: Move unit conversion, direction labels, Beaufort lookup, and slot selection from the watch to the proxy.
+  Rationale: The Instinct 2X data field has a 32 KB memory limit. By performing unit conversion (Beaufort, knots, mph, km/h, m/s), Beaufort-scale lookup for gusts, cardinal direction labelling, and forecast interval selection on the proxy, the watch-side code becomes a thin display layer: `DisplayRenderer` only concatenates pre-computed strings with a literal `<` separator between slots, and `WindData` stores display-ready values (`windSpeed`, `gustSpeed`, `windDir`). The `/v1/forecast` endpoint accepts `units` and `slots` query parameters and returns exactly the entries the watch needs to render, with all values pre-converted. When the user changes the wind unit or interval settings, the watch triggers a refetch with the new parameters rather than re-computing locally. This maximises memory savings on the watch at the cost of slightly more proxy logic and an extra network round-trip when settings change.
   Date/Author: 2026-03-13
 
 - Decision: Use background service (`System.ServiceDelegate`) for all web requests instead of calling `makeWebRequest()` from `compute()`.
@@ -103,7 +103,7 @@ No source code exists yet. Two distinct codebases will be created:
 - **KV (Key-Value store)**: Cloudflare's distributed key-value storage. Used here to cache parsed forecast JSON so the Worker does not re-fetch from Met Eireann on every request.
 - **HARMONIE-AROME**: The numerical weather prediction model run by Met Eireann. It covers Ireland, the UK, and a small area of northern France. Grid resolution is approximately 2.5 km. It runs every 6 hours (00, 06, 12, 18 UTC) and produces hourly forecasts out to 90 hours.
 - **Beaufort scale**: A scale from 0 to 12 that categorises wind speed by its observed effects at sea. See `docs/Marine-Beaufort-scale.png` for the full table.
-- **Veering/backing**: A clockwise shift in wind direction is called veering (symbol: a clockwise arrow). An anticlockwise shift is called backing (symbol: an anticlockwise arrow).
+- **Slot separator**: Adjacent time slots on the display are separated by a literal `<` character. This is a pure formatting separator with no directional meaning.
 - **makeWebRequest()**: The Connect IQ API method `Communications.makeWebRequest()` that sends an HTTP request from the watch. The request is actually routed through the paired phone's internet connection via Bluetooth and the Garmin Connect Mobile app.
 - **Application.Storage**: A persistent key-value store on the watch that survives app restarts. Used to cache forecast data between fetch cycles and across activity sessions.
 
@@ -181,7 +181,7 @@ Then in the simulator, load `bin\WindForce.prg` and start a Kayak activity.
 
 ### Milestone 2: Cloudflare Worker Proxy
 
-This milestone builds the proxy backend that sits between the watch and Met Eireann. At the end, a developer can call the deployed Worker endpoint with a latitude/longitude and receive a compact JSON response containing hourly wind forecast data. They can also call `/model-status` to get the latest model run timestamp.
+This milestone builds the proxy backend that sits between the watch and Met Eireann. At the end, a developer can call the deployed Worker endpoint with a latitude/longitude and receive a compact JSON response containing hourly wind forecast data. They can also call `/v1/model-status` to get the latest model run timestamp.
 
 **Project structure** (all inside `proxy/` directory):
 
@@ -212,9 +212,9 @@ This milestone builds the proxy backend that sits between the watch and Met Eire
 
 The KV namespace ID is obtained by running `wrangler kv namespace create FORECAST_CACHE` after Wrangler is set up.
 
-#### Endpoint: GET /forecast
+#### Endpoint: GET /v1/forecast
 
-URL: `/forecast?lat={lat}&lon={lon}&units={units}&slots={slots}`
+URL: `/v1/forecast?lat={lat}&lon={lon}&units={units}&slots={slots}`
 
 Query parameters:
 
@@ -232,9 +232,10 @@ Processing steps:
 5. If not cached, fetch from Met Eireann: `http://openaccess.pf.api.met.ie/metno-wdb2ts/locationforecast?lat={rounded_lat};long={rounded_lon}`
 6. Parse the XML response. Met Eireann returns XML in the `metno-wdb2ts` format. Extract `windSpeed` (mps and beaufort), `windDirection` (deg and name), and `windGust` (mps) for each hourly time step from now out to 7 hours ahead.
 7. Store the raw forecast in KV with a TTL of 25,200 seconds (7 hours).
-8. Select the forecast entries matching the requested `slots` offsets. For each offset, pick the entry whose time is closest to `now + offset` hours. Compute veer/back between consecutive selected entries. Convert to the requested units and build the JSON response:
+8. Select the forecast entries matching the requested `slots` offsets. For each offset, pick the entry whose time is closest to `now + offset` hours. Convert to the requested units and build the JSON response:
 
         {
+          "api_version": "v1",
           "model_run": "2026-03-12T06:00:00Z",
           "units": "beaufort",
           "forecasts": [
@@ -242,34 +243,31 @@ Processing steps:
               "time": "2026-03-12T10:00:00Z",
               "wind_speed": 4,
               "gust_speed": 6,
-              "wind_dir": "SSW",
-              "veer": null
+              "wind_dir": "SSW"
             },
             {
               "time": "2026-03-12T13:00:00Z",
               "wind_speed": 5,
               "gust_speed": 7,
-              "wind_dir": "SW",
-              "veer": "<"
+              "wind_dir": "SW"
             },
             {
               "time": "2026-03-12T16:00:00Z",
               "wind_speed": 3,
               "gust_speed": 5,
-              "wind_dir": "W",
-              "veer": "<"
+              "wind_dir": "W"
             }
           ]
         }
 
     Response field details:
+    - `api_version`: the API version string (e.g., `"v1"`).
     - `units`: echoes the unit used for `wind_speed` and `gust_speed` (e.g., `"beaufort"`, `"knots"`).
     - `wind_speed`: wind speed as a rounded integer in the requested unit.
     - `gust_speed`: gust speed as a rounded integer in the requested unit.
     - `wind_dir`: cardinal/intercardinal direction label (one of N, NE, E, SE, S, SW, W, NW). Computed from the raw degree value using 8 sectors of 45 degrees each.
-    - `veer`: veering/backing symbol between this entry and the previous one. `">"` for veering (clockwise shift), `"<"` for backing (anticlockwise shift), `null` for the first entry (no predecessor to compare with). Computed from the raw degree values of the two consecutive selected entries using the same normalisation logic (difference normalised to -180..180; positive = veering, negative = backing, zero = veering by convention).
 
-    The `forecasts` array contains exactly the number of entries requested via `slots` (1 to 3), in the same order as the offsets. The watch can render these directly without any selection, conversion, or comparison logic.
+    The `forecasts` array contains exactly the number of entries requested via `slots` (1 to 3), in the same order as the offsets. The watch renders these directly with a literal `<` separator between adjacent slots, without any selection or conversion logic.
 
     Unit conversion formulas (from raw m/s):
     - `beaufort`: standard Beaufort scale lookup (same breakpoints as the current `mpsToBeaufort` table).
@@ -282,7 +280,7 @@ Processing steps:
 
 **XML Parsing**: Cloudflare Workers do not have a built-in DOM XML parser. Use a lightweight streaming/regex-based approach to extract the needed fields from the Met Eireann XML. The XML structure uses `<time>` elements with `from` and `to` attributes, containing `<location>` elements with child elements like `<windSpeed mps="7.2" beaufort="4" .../>` and `<windDirection deg="195" name="SSW"/>` and `<windGust mps="11.3"/>`. A simple parser that extracts these attribute values using regex or a small XML parser library (such as `fast-xml-parser`, which works in Workers) is sufficient.
 
-#### Endpoint: GET /model-status
+#### Endpoint: GET /v1/model-status
 
 1. Check KV for a key `latest_model_run`. If found and fresh (less than 15 minutes old), return it.
 2. Otherwise, fetch a minimal forecast from Met Eireann (e.g., for a fixed point like Dublin: lat=53.35, lon=-6.26) and extract the model run timestamp from the response.
@@ -293,15 +291,15 @@ Processing steps:
 
 After deploying with `wrangler deploy`:
 
-    curl "https://api.kayakshaver.com/forecast?lat=53.35&lon=-6.26&units=beaufort&slots=0,3,6"
+    curl "https://api.kayakshaver.com/v1/forecast?lat=53.35&lon=-6.26&units=beaufort&slots=0,3,6"
 
-Expected: a JSON object with `model_run`, `units` (`"beaufort"`), and `forecasts` array with exactly 3 entries. Each entry has `time`, `wind_speed` (integer), `gust_speed` (integer), `wind_dir` (cardinal label string), and `veer` (`null` for first, `">"` or `"<"` for subsequent).
+Expected: a JSON object with `api_version` (`"v1"`), `model_run`, `units` (`"beaufort"`), and `forecasts` array with exactly 3 entries. Each entry has `time`, `wind_speed` (integer), `gust_speed` (integer), and `wind_dir` (cardinal label string).
 
-    curl "https://api.kayakshaver.com/forecast?lat=53.35&lon=-6.26&units=knots&slots=0"
+    curl "https://api.kayakshaver.com/v1/forecast?lat=53.35&lon=-6.26&units=knots&slots=0"
 
-Expected: same structure but `units` is `"knots"`, speed values are in knots, and `forecasts` has exactly 1 entry with `veer: null`.
+Expected: same structure but `units` is `"knots"`, speed values are in knots, and `forecasts` has exactly 1 entry.
 
-    curl "https://api.kayakshaver.com/model-status"
+    curl "https://api.kayakshaver.com/v1/model-status"
 
 Expected: a JSON object with a single `model_run` field containing a UTC timestamp.
 
@@ -311,11 +309,11 @@ For local development before deploying:
     npm install
     wrangler dev
 
-Then use `http://localhost:8787/forecast?lat=53.35&lon=-6.26` to test locally.
+Then use `http://localhost:8787/v1/forecast?lat=53.35&lon=-6.26` to test locally.
 
 ### Milestone 3: Data Field Display Engine
 
-This milestone implements the rendering logic that turns wind data into the compact text display shown on the watch. At the end, the data field can take a set of wind forecast entries and render the correct layout string (e.g., "3(4)N veer" or "3(4)N>5(6)S") depending on the data field slot size allocated by the user's activity screen configuration.
+This milestone implements the rendering logic that turns wind data into the compact text display shown on the watch. At the end, the data field can take a set of wind forecast entries and render the correct layout string (e.g., "3/4NE" or "3/4NE<5/6S") depending on the data field slot size allocated by the user's activity screen configuration.
 
 **Display rendering overview:**
 
@@ -325,9 +323,9 @@ The Instinct 2X screen is 176x176 monochrome pixels. Data field slots come in va
 
 The number of time slots displayed depends on the width available:
 
-- Narrow field (width < 90px): 1-slot layout: `S(G)D V` where S=speed, G=gust, D=direction arrow, V=veer/back symbol
-- Medium field (90px <= width < 150px): 2-slot layout: `S1(G1)D1 V S2(G2)D2`
-- Wide field (width >= 150px): 3-slot layout: `S1(G1)D1 V1 S2(G2)D2 V2 S3(G3)D3`
+- Narrow field (width < 90px): 1-slot layout: `W/GD` where W=speed, G=gust, D=direction label
+- Medium field (90px <= width < 150px): 2-slot layout: `W1/G1D1<W2/G2D2`
+- Wide field (width >= 150px): 3-slot layout: `W1/G1D1<W2/G2D2<W3/G3D3`
 
 These thresholds should be constants that can be tuned after on-device testing.
 
@@ -335,12 +333,12 @@ These thresholds should be constants that can be tuned after on-device testing.
 
 `source/WindForceView.mc` -- update `onUpdate(dc)` to call the rendering engine rather than drawing static text.
 
-`source/DisplayRenderer.mc` -- a module containing the rendering logic. Because unit conversion, Beaufort lookup, direction labelling, slot selection, and veer/back computation are all performed by the proxy, this module is a thin formatter that concatenates pre-computed values:
+`source/DisplayRenderer.mc` -- a module containing the rendering logic. Because unit conversion, Beaufort lookup, direction labelling, and slot selection are all performed by the proxy, this module is a thin formatter that concatenates pre-computed values:
 
 - `function renderWindSlot(data)` returns a string like "3/4NE" for one time slot. It reads the pre-converted `windSpeed`, `gustSpeed`, and `windDir` directly from the `WindData` object — no conversion needed.
-- `function formatLayout(forecasts)` concatenates the forecast entries into the final display string. Each entry's `veer` field (from the proxy) is inserted between consecutive slots. No slot count parameter is needed — the `forecasts` array already contains exactly the entries requested via the `slots` query parameter. No `units` parameter is needed since values are already converted. No interval selection logic is needed since the proxy performs it.
+- `function formatLayout(forecasts)` concatenates the forecast entries into the final display string. A literal `<` separator is inserted between consecutive slots. No slot count parameter is needed — the `forecasts` array already contains exactly the entries requested via the `slots` query parameter. No `units` parameter is needed since values are already converted. No interval selection logic is needed since the proxy performs it.
 - `function slotCount(width)` determines 1/2/3-slot layout from the field width. The current implementation uses this only for display truncation; the background service still requests 3 slots because cross-process slot-count sync is unresolved.
-- **Removed from watch**: `convertSpeed()`, `mpsToBeaufort()`, `directionLabel()`, `veerBackSymbol()` — all handled by the proxy.
+- **Removed from watch**: `convertSpeed()`, `mpsToBeaufort()`, `directionLabel()`, `veerBackSymbol()` — all handled by the proxy or no longer applicable.
 
 `source/WindData.mc` -- a simple data class to hold pre-converted, display-ready forecast data received from the proxy:
 
@@ -349,16 +347,15 @@ These thresholds should be constants that can be tuned after on-device testing.
         var windSpeed as Number;   // pre-converted integer (Beaufort, knots, etc.)
         var gustSpeed as Number;   // pre-converted integer in same unit
         var windDir as String;     // cardinal label from proxy (e.g., "NE", "SW")
-        var veer as String or Null; // ">" (veering), "<" (backing), or null (first entry)
 
-        function initialize(time, windSpeed, gustSpeed, windDir, veer) { ... }
+        function initialize(time, windSpeed, gustSpeed, windDir) { ... }
     }
 
 **Font selection:** On the 176x176 monochrome screen, `Graphics.FONT_MEDIUM` or `Graphics.FONT_SMALL` is appropriate for the data field text. The font must be small enough that a 3-slot layout fits within the widest field. Test in the simulator to determine the right font. Use `dc.getTextWidthArea(text, font)` to measure text width and select the largest font that fits.
 
 **How to validate:**
 
-In the simulator, configure a Kayak activity with different data field layouts (single field, 2-field, 3-field). The Wind Force field should show the appropriate number of slots. For this milestone, hardcode sample wind data using the new pre-converted format (e.g., windSpeed=3, gustSpeed=4, windDir="NE", windDeg=45; windSpeed=5, gustSpeed=6, windDir="S", windDeg=180). The display should render "3/4NE>5/6S" or similar depending on slot count.
+In the simulator, configure a Kayak activity with different data field layouts (single field, 2-field, 3-field). The Wind Force field should show the appropriate number of slots. For this milestone, hardcode sample wind data using the new pre-converted format (e.g., windSpeed=3, gustSpeed=4, windDir="NE"; windSpeed=5, gustSpeed=6, windDir="S"). The display should render "3/4NE<5/6S" or similar depending on slot count.
 
 ### Milestone 4: Communication Layer and Fetch Strategy
 
@@ -371,7 +368,7 @@ At the end, the data field uses a background service to fetch real wind data fro
 `source/WindForceServiceDelegate.mc` -- a new `System.ServiceDelegate` that runs in the background.
 - Implements `onTemporalEvent()`, which is triggered by the system approximately every 5 minutes.
 - Reads the last known GPS position, which the main app persists to `Application.Storage`.
-- Calls `Communications.makeWebRequest()` to `GET /forecast`, passing the appropriate `units` and `slots` parameters.
+- Calls `Communications.makeWebRequest()` to `GET /v1/forecast`, passing the appropriate `units` and `slots` parameters.
 - On receiving a successful response, it passes the data payload back to the main application using `Background.exit()`.
 
 `source/WindForceApp.mc` -- updated to manage the background service.
@@ -477,7 +474,7 @@ This milestone adds the configurable settings (wind units, forecast intervals) a
 
 **Staleness indicator:**
 
-In `source/DisplayRenderer.mc`, `formatLayout()` accepts a per-forecast `fetchTimestamp`. If `Time.now().value() - fetchTimestamp > 1800` (30 minutes), append `*` to the display string. If space permits, append the age in minutes (e.g., `*47m`). The staleness threshold constant (1800 seconds) should be defined in one place. Note: `formatLayout()` needs neither a `units` parameter nor interval selection logic - the proxy returns exactly the display-ready entries with pre-converted values and veer/back symbols.
+In `source/DisplayRenderer.mc`, `formatLayout()` accepts a per-forecast `fetchTimestamp`. If `Time.now().value() - fetchTimestamp > 1800` (30 minutes), prefix the display string with `*`. The staleness threshold constant (1800 seconds) is defined in one place. Note: `formatLayout()` needs neither a `units` parameter nor interval selection logic - the proxy returns exactly the display-ready entries with pre-converted values. Adjacent time slots are separated by a literal `<` character.
 
 **Unavailable data display:**
 
@@ -495,10 +492,10 @@ The forecast intervals (e.g., 3h, 6h) determine which entries the proxy returns.
 
 1. In the simulator or on device, change wind units from Beaufort to Knots. The currently displayed data may remain visible until the next background temporal event; after that event, the field should update to show knot values instead of Beaufort numbers. The `units` field in the proxy response should reflect `"knots"`.
 2. Change forecast intervals and verify the correct future time slots are shown after the next background event.
-3. Set forecast interval 2 equal to interval 1 and verify it gets clamped to interval1 + 1.
+3. Set forecast interval 1 to 6 and verify that the third slot is suppressed (only 2 slots shown), since no valid later interval exists.
 4. To test staleness: in the simulator, disconnect the simulated phone connection, wait, and observe the staleness indicator appearing after 30 minutes (or temporarily lower the threshold for testing).
 5. On a physical device, verify that `Application.Properties` changes made during an active activity are visible to the background service on the next temporal event. Record the result explicitly, because this is currently an architectural risk rather than a confirmed behaviour.
-6. Verify that changing units while offline does not crash - the display should continue showing old-unit data with the staleness indicator until connectivity is restored and a refetch succeeds.
+6. Verify that changing units while offline does not crash - cached forecasts are cleared immediately and the display shows `---` until connectivity is restored and a refetch succeeds with the new settings.
 
 ### Milestone 6: Integration Testing, Optimisation, and Deployment
 
@@ -527,7 +524,7 @@ The Instinct 2X data field memory limit is 32,768 bytes (32 KB). This is extreme
 - Test with no GPS fix (indoor start): display should show `NO GPS` until GPS is acquired.
 - Test connectivity loss: disconnect simulated phone, verify staleness indicator and cached data display.
 - Look-ahead point usage is deferred: do not mark this as covered by Milestone 4. Reintroduce this checklist item only when the deferred look-ahead milestone is implemented.
-- Test that periodic background refreshes pick up a new model run automatically on the next successful `/forecast` fetch.
+- Test that periodic background refreshes pick up a new model run automatically on the next successful `/v1/forecast` fetch.
 - Test on-device that settings changes propagate to the background service during an active activity.
 - Verify `Application.Storage` persistence: start an activity, stop it, start a new one, and verify old data is available as fallback.
 
@@ -584,11 +581,11 @@ Milestone 1 steps:
 Each milestone has its own validation section above. The overall acceptance criteria for the complete project:
 
 1. A Kayak activity on the Instinct 2X Solar displays the Wind Force data field with live Met Eireann wind data.
-2. The display shows wind speed, gust speed, direction arrow, and veering/backing symbol.
+2. The display shows wind speed, gust speed, and wind direction label, with a `<` separator between adjacent time slots.
 3. Multiple time slots are shown when the data field occupies a wider screen slot.
 4. Wind units are configurable (Beaufort, Knots, mph, km/h, m/s) via Garmin Connect Mobile.
 5. Forecast intervals for the 2nd and 3rd time slots are configurable (1-6 hours).
-6. Data refreshes via background temporal events using the latest stored GPS position, and new model runs are picked up automatically on subsequent `/forecast` fetches.
+6. Data refreshes via background temporal events using the latest stored GPS position, and new model runs are picked up automatically on subsequent `/v1/forecast` fetches.
 7. Offline fallback uses the nearest cached forecast grid point. Look-ahead caching is deferred follow-up work and is not currently part of the implemented Milestone 4 architecture.
 8. Stale data is indicated with an asterisk or age in minutes.
 9. When no GPS fix is available, the field shows `NO GPS`. When GPS is available but no forecast is cached for the current or nearest grid point, the field shows `---`.
@@ -697,8 +694,7 @@ In `source/WindData.mc`:
         var windSpeed as Number      // pre-converted integer in the requested unit
         var gustSpeed as Number      // pre-converted integer in the same unit
         var windDir as String        // cardinal/intercardinal label (e.g., "NE")
-        var veer as String or Null   // ">" (veering), "<" (backing), or null (first entry)
-        function initialize(time as String, windSpeed as Number, gustSpeed as Number, windDir as String, veer as String or Null) as Void
+        function initialize(time as String, windSpeed as Number, gustSpeed as Number, windDir as String) as Void
     }
 
 In `source/WindForceServiceDelegate.mc`:
@@ -727,16 +723,17 @@ In `proxy/src/types.ts`:
         wind_speed: number;    // pre-converted integer
         gust_speed: number;    // pre-converted integer
         wind_dir: string;      // cardinal/intercardinal label (e.g., "NE")
-        veer: string | null;   // ">" (veering), "<" (backing), or null (first entry)
     }
 
     interface ForecastResponse {
+        api_version: string;   // API version (e.g., "v1")
         model_run: string;
         units: string;         // echoes the requested unit (e.g., "beaufort", "knots")
         forecasts: ForecastEntry[];
     }
 
     interface ModelStatusResponse {
+        api_version: string;   // API version (e.g., "v1")
         model_run: string;
     }
 
@@ -770,7 +767,7 @@ In `proxy/src/met-eireann.ts`:
 **Revision 2 (2026-03-12):** Addressed all 5 findings from `docs/execution_plan_review.v1.md`:
 
 1. Fixed Wrangler route syntax from `[routes]` to `[[routes]]` (TOML array-of-tables).
-2. Added 15-minute throttled polling interval for `/model-status` with `MODEL_STATUS_POLL_INTERVAL_SEC` constant; `executeFetchCycle` now evaluates local triggers first and only polls the proxy on the configured interval.
+2. Added 15-minute throttled polling interval for `/v1/model-status` with `MODEL_STATUS_POLL_INTERVAL_SEC` constant; `executeFetchCycle` now evaluates local triggers first and only polls the proxy on the configured interval.
 3. Standardised all internal coordinate and heading math to radians (matching `Activity.Info.currentHeading` and `Position.Location` native units). Degrees used only for display and proxy URL parameters. Updated `computeLookAheadPoints` signature from `bearingDeg` to `bearingRad`. Added Decision Log entries.
 4. Replaced ambiguous settings file reference with prescriptive `resources/properties.xml` (confirmed for SDK 8.2.3).
 5. Added timestamps to all Progress entries and added this Revision History section per PLANS.md requirements.
@@ -792,21 +789,21 @@ In `proxy/src/met-eireann.ts`:
 - `proxy/package.json`, `proxy/tsconfig.json`, `proxy/wrangler.toml` (project scaffolding)
 - `proxy/src/types.ts` (Env, ForecastEntry, ForecastResponse, ModelStatusResponse interfaces)
 - `proxy/src/met-eireann.ts` (XML fetch + parsing with fast-xml-parser; filters point forecasts where from===to; extracts harmonie model run timestamp)
-- `proxy/src/index.ts` (Worker entry point; GET /forecast with coordinate rounding to 0.025 deg, KV caching with 7h TTL; GET /model-status with 15min TTL; CORS headers; input validation)
-- Both endpoints tested locally via `wrangler dev`: `/forecast?lat=53.35&lon=-6.26` returns 7 hourly forecasts with wind_mps, wind_deg, wind_beaufort, gust_mps; `/model-status` returns harmonie model run timestamp.
+- `proxy/src/index.ts` (Worker entry point; GET /v1/forecast with coordinate rounding to 0.025 deg, KV caching with 7h TTL; GET /v1/model-status with 15min TTL; CORS headers; input validation)
+- Both endpoints tested locally via `wrangler dev`: `/v1/forecast?lat=53.35&lon=-6.26` returns api_version, units, and forecasts with wind_speed, gust_speed, wind_dir; `/v1/model-status` returns api_version and harmonie model run timestamp.
 - Error handling verified: missing params (400), invalid coords (400), unknown paths (404).
 - KV namespace ID is a placeholder; must run `wrangler kv namespace create FORECAST_CACHE` before deploying.
 
 **Revision 5 (2026-03-13):** Milestone 3 completed. Display engine:
 
 - `source/WindData.mc` (data class: time, windMps, windDeg, windBeaufort, gustMps)
-- `source/DisplayRenderer.mc` (module: renderWindSlot, directionLabel, veerBackSymbol, convertSpeed, mpsToBeaufort, formatLayout, slotCount)
+- `source/DisplayRenderer.mc` (module: renderWindSlot, formatLayout, slotCount)
 - Updated `source/WindForceView.mc` (onLayout determines slot count from dc width; onUpdate calls DisplayRenderer with hardcoded sample data; selectFont auto-picks largest font that fits)
 - Layout selection: 1-slot (<90px), 2-slot (90-149px), 3-slot (>=150px)
 - Direction: 8 cardinal/intercardinal labels (N, NE, E, SE, S, SW, W, NW)
-- Veer/back: ">" for veering (clockwise), "<" for backing (anticlockwise)
+- Separator: literal `<` between adjacent time slots
 - Unit conversion: Beaufort (default), knots, mph, km/h, m/s with mpsToBeaufort lookup for gust
-- Verified in simulator: small slot shows "3(4)NE", large slot shows "3(4)NE>5(6)S>3(5)SW"
+- Verified in simulator: small slot shows "3/4NE", large slot shows "3/4NE<5/6S<3/5SW"
 - Memory: 9.4/28.5kB — ~19kB headroom remaining.
 
 **Revision 6 (2026-03-13):** Architectural change — move calculations from watch to proxy.
@@ -815,25 +812,25 @@ Motivation: The Instinct 2X data field has a 32 KB memory limit. Unit conversion
 
 Changes across milestones:
 
-- **Milestone 2 (Proxy):** `/forecast` endpoint now accepts an optional `units` query parameter (`beaufort`, `knots`, `mph`, `kmh`, `mps`; default `beaufort`). Raw forecast data is cached in KV in its original m/s + degrees form; unit conversion is applied on the fly before returning the response. Response shape changed: `wind_mps`/`wind_beaufort`/`gust_mps` replaced by `wind_speed` (integer), `gust_speed` (integer), `wind_dir` (cardinal label string). `wind_deg` retained for veer/back. Top-level `units` field added to echo the requested unit.
+- **Milestone 2 (Proxy):** `/v1/forecast` endpoint now accepts an optional `units` query parameter (`beaufort`, `knots`, `mph`, `kmh`, `mps`; default `beaufort`). Raw forecast data is cached in KV in its original m/s + degrees form; unit conversion is applied on the fly before returning the response. Response shape changed: `wind_mps`/`wind_beaufort`/`gust_mps` replaced by `wind_speed` (integer), `gust_speed` (integer), `wind_dir` (cardinal label string). Top-level `units` field added to echo the requested unit.
 - **Milestone 3 (Display Engine):** `DisplayRenderer` simplified — removed `convertSpeed()`, `mpsToBeaufort()`, `directionLabel()`. `renderWindSlot()` reads pre-converted values directly. `formatLayout()` no longer takes a `units` parameter. `WindData` fields changed from raw floats to pre-converted integers + direction string.
 - **Milestone 4 (Communication):** `ForecastService.fetchForecast()` signature gains a `units` string parameter. `FetchManager.executeFetchCycle()` reads the current unit setting, passes it to `fetchForecast()`, and tracks `_lastFetchedUnits` to detect unit changes as a fetch trigger.
 - **Milestone 5 (Settings):** `SettingsManager` gains `getWindUnitsString()` to map the numeric setting to a proxy-compatible string. Unit change triggers a refetch (not a local re-render), with a brief display delay of 1-3 seconds while the new data is fetched.
 - **Interfaces:** TypeScript `types.ts` splits into `RawForecastEntry` (internal/cache) and `ForecastEntry` (response). `ForecastResponse` gains a `units` field. Monkey C `WindData` fields changed to `windSpeed`, `gustSpeed`, `windDir`, `windDeg`.
 - **Decision Log:** New entry added for this architectural shift.
 
-**Revision 7 (2026-03-13):** Move slot selection and veer/back computation from watch to proxy.
+**Revision 7 (2026-03-13):** Move slot selection from watch to proxy.
 
-Motivation: Since the proxy already performs unit conversion and direction labelling, it's natural to also have it select the forecast entries for the requested time slots and compute the veer/back symbol between them. This eliminates `veerBackSymbol()` and interval selection logic from the watch, and removes `wind_deg` from the response (no longer needed on the watch).
+Motivation: Since the proxy already performs unit conversion and direction labelling, it's natural to also have it select the forecast entries for the requested time slots. This eliminates interval selection logic from the watch and removes `wind_deg` from the response (no longer needed on the watch).
 
 Changes across milestones:
 
-- **Milestone 2 (Proxy):** `/forecast` endpoint gains a `slots` query parameter (comma-separated hour offsets, e.g., `0,3,6`, max 3 values, default `0`). The proxy selects the closest forecast entry for each offset and computes veer/back between consecutive selected entries. Response field `wind_deg` replaced by `veer` (`">"`, `"<"`, or `null` for the first entry).
-- **Milestone 3 (Display Engine):** `DisplayRenderer` further simplified — removed `veerBackSymbol()`. `formatLayout()` no longer takes a `slotCount` parameter or performs interval selection; it iterates the `forecasts` array directly (which already contains exactly the right entries). `WindData` field `windDeg` replaced by `veer` (String or Null).
+- **Milestone 2 (Proxy):** `/v1/forecast` endpoint gains a `slots` query parameter (comma-separated hour offsets, e.g., `0,3,6`, max 3 values, default `0`). The proxy selects the closest forecast entry for each offset. Response field `wind_deg` removed (not needed on the watch).
+- **Milestone 3 (Display Engine):** `DisplayRenderer` further simplified — `formatLayout()` no longer takes a `slotCount` parameter or performs interval selection; it iterates the `forecasts` array directly (which already contains exactly the right entries) and inserts a literal `<` between slots. `WindData` field `windDeg` removed.
 - **Milestone 4 (Communication):** `ForecastService.fetchForecast()` signature gains a `slots` string parameter. `FetchManager.executeFetchCycle()` builds the `slots` string from the current slot count (from field width) and interval settings, and tracks `_lastFetchedSlots` to detect interval changes as a fetch trigger.
 - **Milestone 5 (Settings):** Interval change now triggers a refetch (same as unit change). Forecast interval mapping logic moved from `DisplayRenderer` to the proxy.
-- **Interfaces:** `ForecastEntry` field `wind_deg` replaced by `veer: string | null`. Monkey C `WindData` field `windDeg` replaced by `veer as String or Null`. `ForecastService.fetchForecast()` gains `slots` parameter. `DisplayRenderer.formatLayout()` loses `slotCount` parameter; `veerBackSymbol()` removed.
-- **Decision Log:** Entry updated to include slot selection and veer/back.
+- **Interfaces:** `ForecastEntry` field `wind_deg` removed. Monkey C `WindData` field `windDeg` removed. `ForecastService.fetchForecast()` gains `slots` parameter. `DisplayRenderer.formatLayout()` loses `slotCount` parameter.
+- **Decision Log:** Entry updated to include slot selection.
 
 **Revision 8 (2026-03-14):** Align execution plan with the background-service rework and documented deferrals.
 
