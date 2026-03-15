@@ -35,7 +35,6 @@ class WindForceView extends WatchUi.DataField {
 
         // Load forecast data from storage for current position
         var dict = findBestForecast();
-        var forecasts = parseForecastEntries(dict);
 
         // Use per-forecast fetch timestamp for staleness (not global)
         var ts = 0;
@@ -44,9 +43,20 @@ class WindForceView extends WatchUi.DataField {
             if (fetchTs instanceof Number) { ts = fetchTs as Number; }
         }
 
-        var text = DisplayRenderer.formatLayout(forecasts, ts, _fetchMgr.hasPosition);
-
-        var font = selectFont(dc, text);
+        // Try rendering with max slots, reduce if text overflows
+        var maxWidth = dc.getWidth() - 4;
+        var slots = _slots;
+        var text = "";
+        var font = Graphics.FONT_XTINY;
+        while (slots > 0) {
+            var forecasts = parseForecastEntries(dict, slots);
+            text = DisplayRenderer.formatLayout(forecasts, ts, _fetchMgr.hasPosition);
+            font = selectFont(dc, text);
+            if (dc.getTextWidthInPixels(text, font) <= maxWidth) {
+                break;
+            }
+            slots--;
+        }
 
         dc.setColor(fgColor, Graphics.COLOR_TRANSPARENT);
         dc.drawText(
@@ -60,7 +70,8 @@ class WindForceView extends WatchUi.DataField {
 
     //! Parse forecast entries from a stored forecast dictionary.
     //! @param dict The forecast dictionary from storage (may be null)
-    private function parseForecastEntries(dict as Dictionary?) as Array<WindData> {
+    //! @param slots Maximum number of slots to parse
+    private function parseForecastEntries(dict as Dictionary?, slots as Number) as Array<WindData> {
         var result = [] as Array<WindData>;
 
         if (dict == null) {
@@ -73,7 +84,7 @@ class WindForceView extends WatchUi.DataField {
         }
 
         var arr = forecasts as Array;
-        var count = (arr.size() < _slots) ? arr.size() : _slots;
+        var count = (arr.size() < slots) ? arr.size() : slots;
         for (var i = 0; i < count; i++) {
             var entry = arr[i];
             if (entry instanceof Dictionary) {
