@@ -9,11 +9,6 @@ import Toybox.System;
 (:background)
 class WindForceServiceDelegate extends System.ServiceDelegate {
 
-    // Settings strings captured at request time, included in Background.exit()
-    // so the foreground can reject responses fetched under stale settings.
-    private var _requestedUnits as String = "";
-    private var _requestedSlots as String = "";
-
     function initialize() {
         ServiceDelegate.initialize();
     }
@@ -38,15 +33,10 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
         var units = getUnitsString();
         var slots = getSlotsString();
 
-        // Capture for inclusion in Background.exit() so the foreground
-        // can reject responses fetched under stale settings.
-        _requestedUnits = units;
-        _requestedSlots = slots;
-
         var rLat = roundCoord(latDeg);
         var rLon = roundCoord(lonDeg);
 
-        var url = "https://wind-force-proxy.alex-cc4.workers.dev/v1/forecast";
+        var url = "https://api-wind-force.kayakshaver.com/v1/forecast";
         var params = {
             "lat" => latDeg.format("%.3f"),
             "lon" => lonDeg.format("%.3f"),
@@ -58,9 +48,12 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
             :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
         };
 
-        // Store rounded coords so onBackgroundData knows the storage key
+        // Store request metadata so onForecastReceived can include it
+        // in Background.exit() for foreground settings validation.
         Storage.setValue("bg_rLat", rLat);
         Storage.setValue("bg_rLon", rLon);
+        Storage.setValue("bg_reqUnits", units);
+        Storage.setValue("bg_reqSlots", slots);
 
         Communications.makeWebRequest(url, params, options, method(:onForecastReceived));
     }
@@ -73,13 +66,15 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
         if (responseCode == 200 && data instanceof Dictionary) {
             var rLat = Storage.getValue("bg_rLat");
             var rLon = Storage.getValue("bg_rLon");
+            var rUnits = Storage.getValue("bg_reqUnits");
+            var rSlots = Storage.getValue("bg_reqSlots");
             Background.exit({
                 "kind" => "forecast",
                 "payload" => data,
                 "rLat" => (rLat instanceof String) ? rLat : "0.000",
                 "rLon" => (rLon instanceof String) ? rLon : "0.000",
-                "reqUnits" => _requestedUnits,
-                "reqSlots" => _requestedSlots
+                "reqUnits" => (rUnits instanceof String) ? rUnits : "",
+                "reqSlots" => (rSlots instanceof String) ? rSlots : ""
             });
         } else {
             Background.exit({

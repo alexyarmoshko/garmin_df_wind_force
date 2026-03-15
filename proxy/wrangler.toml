@@ -6,12 +6,9 @@ compatibility_date = "2024-01-01"
 binding = "FORECAST_CACHE"
 id = "e767f9f63ec641e197973ea9cec58e1b"
 
-# To use a custom domain, either:
-# 1. Add kayakshaver.com as a proxied zone in Cloudflare, then uncomment:
-#    [[routes]]
-#    pattern = "api.kayakshaver.com/*"
-#    zone_name = "kayakshaver.com"
-# 2. Or add a Custom Domain via the Cloudflare dashboard after deploying.
-#
+[[routes]]
+pattern = "api-wind-force.kayakshaver.com/*"
+zone_name = "kayakshaver.com"
+
 # Without routes, the Worker deploys to:
 #   https://wind-force-proxy.<your-account>.workers.dev
