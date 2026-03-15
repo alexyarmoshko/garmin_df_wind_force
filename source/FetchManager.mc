@@ -17,9 +17,16 @@ class FetchManager {
 
     //! Called from compute(). Saves current GPS position to Storage
     //! for the background service to read when it fires.
+    //! Clears position when GPS fix is lost so the display reverts to
+    //! "NO GPS" and the background service stops using stale coordinates.
     function updatePosition(info as Activity.Info) as Void {
         var loc = info.currentLocation;
         if (loc == null) {
+            if (hasPosition) {
+                hasPosition = false;
+                Storage.deleteValue("bg_lat");
+                Storage.deleteValue("bg_lon");
+            }
             return;
         }
 

@@ -49,8 +49,7 @@ module DisplayRenderer {
 
         result += renderWindSlot(forecasts[0]);
         for (var i = 1; i < forecasts.size(); i++) {
-            var v = forecasts[i].veer;
-            result += (v != null) ? v : ">";
+            result += "<";
             result += renderWindSlot(forecasts[i]);
         }
 
