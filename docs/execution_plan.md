@@ -337,7 +337,7 @@ These thresholds should be constants that can be tuned after on-device testing.
 
 `source/DisplayRenderer.mc` -- a module containing the rendering logic. Because unit conversion, Beaufort lookup, direction labelling, slot selection, and veer/back computation are all performed by the proxy, this module is a thin formatter that concatenates pre-computed values:
 
-- `function renderWindSlot(data)` returns a string like "3(4)NE" for one time slot. It reads the pre-converted `windSpeed`, `gustSpeed`, and `windDir` directly from the `WindData` object — no conversion needed.
+- `function renderWindSlot(data)` returns a string like "3/4NE" for one time slot. It reads the pre-converted `windSpeed`, `gustSpeed`, and `windDir` directly from the `WindData` object — no conversion needed.
 - `function formatLayout(forecasts)` concatenates the forecast entries into the final display string. Each entry's `veer` field (from the proxy) is inserted between consecutive slots. No slot count parameter is needed — the `forecasts` array already contains exactly the entries requested via the `slots` query parameter. No `units` parameter is needed since values are already converted. No interval selection logic is needed since the proxy performs it.
 - `function slotCount(width)` determines 1/2/3-slot layout from the field width. The current implementation uses this only for display truncation; the background service still requests 3 slots because cross-process slot-count sync is unresolved.
 - **Removed from watch**: `convertSpeed()`, `mpsToBeaufort()`, `directionLabel()`, `veerBackSymbol()` — all handled by the proxy.
@@ -358,7 +358,7 @@ These thresholds should be constants that can be tuned after on-device testing.
 
 **How to validate:**
 
-In the simulator, configure a Kayak activity with different data field layouts (single field, 2-field, 3-field). The Wind Force field should show the appropriate number of slots. For this milestone, hardcode sample wind data using the new pre-converted format (e.g., windSpeed=3, gustSpeed=4, windDir="NE", windDeg=45; windSpeed=5, gustSpeed=6, windDir="S", windDeg=180). The display should render "3(4)NE>5(6)S" or similar depending on slot count.
+In the simulator, configure a Kayak activity with different data field layouts (single field, 2-field, 3-field). The Wind Force field should show the appropriate number of slots. For this milestone, hardcode sample wind data using the new pre-converted format (e.g., windSpeed=3, gustSpeed=4, windDir="NE", windDeg=45; windSpeed=5, gustSpeed=6, windDir="S", windDeg=180). The display should render "3/4NE>5/6S" or similar depending on slot count.
 
 ### Milestone 4: Communication Layer and Fetch Strategy
 

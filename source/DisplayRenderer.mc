@@ -57,9 +57,9 @@ module DisplayRenderer {
         return result;
     }
 
-    //! Render a single time slot: "S(G)D"
+    //! Render a single time slot: "W/GD" (e.g. "9/23S")
     function renderWindSlot(data as WindData) as String {
-        return data.windSpeed.toString() + "(" + data.gustSpeed.toString() + ")" + data.windDir;
+        return data.windSpeed.toString() + "/" + data.gustSpeed.toString() + data.windDir;
     }
 
 }

@@ -126,3 +126,10 @@
   2. Fixed duplicate slots when `forecastInterval1 = 6`: `getSlotsString()` now suppresses the third slot entirely when `interval2` would exceed 6, emitting `0,6` instead of `0,6,6`. Eliminates duplicate forecast entries and misleading veer symbols between identical time steps.
   3. Fixed in-flight background responses repopulating cache after settings change: added `settings_ver` counter to `Application.Storage`. `onSettingsChanged()` increments the version; `WindForceServiceDelegate.onTemporalEvent()` captures it and includes it in the `Background.exit()` payload (`sv` field). `onBackgroundData()` compares the response version against the current version and discards mismatches. Even if Storage sync is delayed (background reads old version), the response is tagged with the old version and correctly rejected.
   - PRG file size after fixes: 12.1 KB (release build).
+
+## 2026-03-15
+
+- Display format and overflow improvements:
+  - Changed slot format from `S(G)D` to `W/GD` (e.g., `9/23S` instead of `9(23)S`). Saves 2 characters per slot by replacing parentheses with `/` and removing the closing paren.
+  - Added dynamic slot count reduction: `onUpdate()` now tries rendering with the maximum slot count first, then reduces slots one at a time until the text fits the field width. Prevents clipping when high wind speeds or two-letter directions produce long strings (e.g., `9/23S<11/25SE>18/42S`).
+  - `parseForecastEntries()` now takes an explicit `slots` parameter instead of using the `_slots` instance variable, enabling the retry loop.
