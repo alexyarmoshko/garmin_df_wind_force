@@ -20,25 +20,25 @@ I found one remaining defect.
 
 The new look-ahead implementation queues coordinates locally and then fires two asynchronous requests:
 
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L122)
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L129)
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L130)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L122)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L129)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L130)
 
 When a response arrives, `onLookAheadReceived()` always pops the first queued coordinate pair, regardless of which request actually completed:
 
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L171)
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L174)
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L176)
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L182)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L171)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L174)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L176)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L182)
 
 `Communications.makeWebRequest()` is asynchronous, and the SDK request options support a `:context` object specifically so callers can correlate a response with the originating request:
 
-- [source/ForecastService.mc](c:/Users/alex/repos/garmin_df_wind_force/source/ForecastService.mc#L29)
-- [BulkDownloadRequestDelegate.mc](c:/Users/alex/AppData/Roaming/Garmin/ConnectIQ/Sdks/connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21/samples/BulkDownload/source/BulkDownloadRequestDelegate.mc#L30)
-- [BulkDownloadRequestDelegate.mc](c:/Users/alex/AppData/Roaming/Garmin/ConnectIQ/Sdks/connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21/samples/BulkDownload/source/BulkDownloadRequestDelegate.mc#L33)
-- [BulkDownloadRequestDelegate.mc](c:/Users/alex/AppData/Roaming/Garmin/ConnectIQ/Sdks/connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21/samples/BulkDownload/source/BulkDownloadRequestDelegate.mc#L41)
+- [source/ForecastService.mc](~/repos/garmin_df_wind_force/source/ForecastService.mc#L29)
+- [BulkDownloadRequestDelegate.mc](~/AppData/Roaming/Garmin/ConnectIQ/Sdks/connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21/samples/BulkDownload/source/BulkDownloadRequestDelegate.mc#L30)
+- [BulkDownloadRequestDelegate.mc](~/AppData/Roaming/Garmin/ConnectIQ/Sdks/connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21/samples/BulkDownload/source/BulkDownloadRequestDelegate.mc#L33)
+- [BulkDownloadRequestDelegate.mc](~/AppData/Roaming/Garmin/ConnectIQ/Sdks/connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21/samples/BulkDownload/source/BulkDownloadRequestDelegate.mc#L41)
 
-I did not find any source guaranteeing in-order callback delivery. Absent that guarantee, the FIFO queue is unsafe: if the 5 km request returns before the 2.5 km request, its payload will be written under the 2.5 km rounded key, and the later response will be written under the 5 km key. That corrupts the spatial cache used by [source/StorageManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/StorageManager.mc#L55) and can make nearest-point fallback display the wrong forecast for the user’s actual position.
+I did not find any source guaranteeing in-order callback delivery. Absent that guarantee, the FIFO queue is unsafe: if the 5 km request returns before the 2.5 km request, its payload will be written under the 2.5 km rounded key, and the later response will be written under the 5 km key. That corrupts the spatial cache used by [source/StorageManager.mc](~/repos/garmin_df_wind_force/source/StorageManager.mc#L55) and can make nearest-point fallback display the wrong forecast for the user’s actual position.
 
 ## Verification Performed
 

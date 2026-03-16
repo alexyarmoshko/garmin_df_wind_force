@@ -110,8 +110,8 @@ No source code exists yet. Two distinct codebases will be created:
 **Development environment:**
 
 - IDE: Visual Studio Code with the Monkey C / Connect IQ extension
-- Connect IQ SDK: version 8.2.3, located at `C:\Users\alex\AppData\Roaming\Garmin\ConnectIQ\Sdks\connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21\`
-- SDK samples: `<SDK_PATH>\samples\` and `C:\Users\alex\repos\garmin-connectiq-apps\`
+- Connect IQ SDK: version 8.2.3, located at `~\AppData\Roaming\Garmin\ConnectIQ\Sdks\connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21\`
+- SDK samples: `<SDK_PATH>\samples\` and `~\repos\garmin-connectiq-apps\`
 - Target device: Instinct 2X Solar (device ID: `instinct2x`)
 - Display: 176 x 176 pixels, monochrome (2 colours: black and white), semi-octagon shape, no touch screen
 - Data field memory limit: 32,768 bytes (32 KB) -- this is tight and requires lean code
@@ -174,8 +174,8 @@ Open the project in VS Code with the Connect IQ extension. Build for the `instin
 
 Build command (from the VS Code Command Palette): `Monkey C: Build for Device` selecting `instinct2x`. Alternatively, from the terminal:
 
-    cd c:\Users\alex\repos\garmin_df_wind_force
-    "C:\Users\alex\AppData\Roaming\Garmin\ConnectIQ\Sdks\connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21\bin\monkeyc" -d instinct2x -f monkey.jungle -o bin\WindForce.prg -y "path\to\developer_key.der"
+    cd ~\repos\garmin_df_wind_force
+    "~\AppData\Roaming\Garmin\ConnectIQ\Sdks\connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21\bin\monkeyc" -d instinct2x -f monkey.jungle -o bin\WindForce.prg -y "path\to\developer_key.der"
 
 Then in the simulator, load `bin\WindForce.prg` and start a Kayak activity.
 
@@ -553,7 +553,7 @@ The complete system is validated by performing an actual kayak paddle (or a walk
 
 Milestone 1 steps:
 
-    Working directory: c:\Users\alex\repos\garmin_df_wind_force
+    Working directory: ~\repos\garmin_df_wind_force
 
     1. Create the project directory structure:
        source/
@@ -565,7 +565,7 @@ Milestone 1 steps:
        as described in the Milestone 1 plan above.
 
     3. Generate a developer key if one does not already exist:
-       "C:\Users\alex\AppData\Roaming\Garmin\ConnectIQ\Sdks\connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21\bin\connectiq" keygen
+       "~\AppData\Roaming\Garmin\ConnectIQ\Sdks\connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21\bin\connectiq" keygen
 
     4. Build: Open VS Code, open the garmin_df_wind_force folder, press Ctrl+Shift+P,
        select "Monkey C: Build for Device", choose instinct2x.

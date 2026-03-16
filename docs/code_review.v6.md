@@ -16,19 +16,19 @@ I found one remaining issue.
 
 `_lastModelRun` is only updated by `onModelStatus()`:
 
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L33)
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L137)
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L142)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L33)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L137)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L142)
 
 But `onForecastReceived()` reads `model_run` from the forecast payload without ever seeding `_lastModelRun` from it:
 
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L155)
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L159)
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L178)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L155)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L159)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L178)
 
 That means `_lastModelRun` still starts as `""` after app startup. On the first successful `/model-status` response, this condition always fires:
 
-- [source/FetchManager.mc](c:/Users/alex/repos/garmin_df_wind_force/source/FetchManager.mc#L141)
+- [source/FetchManager.mc](~/repos/garmin_df_wind_force/source/FetchManager.mc#L141)
 
 So the code resets `_lastFetchTime = 0` and forces another full fetch even if the just-stored forecast already came from that exact same model run. The likely user-visible effect is one redundant refetch after startup or after state reset, including redundant look-ahead requests on the initial cycle when heading is available.
 

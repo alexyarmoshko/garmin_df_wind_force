@@ -90,7 +90,7 @@ Recommended fix:
 
 - Make the plan prescriptive and use `resources/properties.xml`.
 
-### 5. Medium: the execution plan does not fully follow `C:\Users\alex\.codex\PLANS.md`
+### 5. Medium: the execution plan does not fully follow `~\.codex\PLANS.md`
 
 The current plan includes the required major sections, but it misses two format requirements from `PLANS.md`:
 
@@ -145,4 +145,4 @@ The next revision of `docs/execution_plan.md` should, at minimum:
 2. Add a throttled polling strategy for `/model-status`.
 3. Normalize heading and bearing math to radians throughout the watch-side design.
 4. Replace the settings file ambiguity with a single prescribed file path.
-5. Bring the living-document sections into compliance with `C:\Users\alex\.codex\PLANS.md`.
+5. Bring the living-document sections into compliance with `~\.codex\PLANS.md`.
