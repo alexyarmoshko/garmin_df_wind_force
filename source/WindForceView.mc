@@ -15,6 +15,7 @@ class WindForceView extends WatchUi.DataField {
     function initialize() {
         DataField.initialize();
         _fetchMgr = new FetchManager();
+        DisplayRenderer.init();
     }
 
     function onLayout(dc as Dc) as Void {

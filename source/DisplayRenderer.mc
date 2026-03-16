@@ -1,5 +1,6 @@
 import Toybox.Lang;
 import Toybox.Time;
+import Toybox.WatchUi;
 
 // Layout width thresholds (px) -- tune after on-device testing
 const THRESHOLD_2_SLOT = 90;
@@ -9,6 +10,20 @@ const THRESHOLD_3_SLOT = 150;
 const STALE_THRESHOLD_SEC = 1800;
 
 module DisplayRenderer {
+
+    // Translatable display strings (loaded once via init)
+    var sNoGps as String = "";
+    var sNoForecast as String = "";
+    var sStalePrefix as String = "";
+    var sSlotSeparator as String = "";
+
+    //! Load translatable strings from resources. Call once at startup.
+    function init() as Void {
+        sNoGps = WatchUi.loadResource($.Rez.Strings.NoGps) as String;
+        sNoForecast = WatchUi.loadResource($.Rez.Strings.NoForecast) as String;
+        sStalePrefix = WatchUi.loadResource($.Rez.Strings.StalePrefix) as String;
+        sSlotSeparator = WatchUi.loadResource($.Rez.Strings.SlotSeparator) as String;
+    }
 
     //! Determine how many time slots fit in the given width.
     function slotCount(width as Number) as Number {
@@ -32,24 +47,24 @@ module DisplayRenderer {
     ) as String {
         if (forecasts.size() == 0) {
             if (!hasPosition) {
-                return "NO GPS";
+                return sNoGps;
             }
-            return "---";
+            return sNoForecast;
         }
 
         var result = "";
 
-        // Prefix with "*" when data is stale
+        // Prefix with stale indicator when data is old
         if (fetchTimestamp > 0) {
             var age = Time.now().value() - fetchTimestamp;
             if (age > STALE_THRESHOLD_SEC) {
-                result = "*";
+                result = sStalePrefix;
             }
         }
 
         result += renderWindSlot(forecasts[0]);
         for (var i = 1; i < forecasts.size(); i++) {
-            result += "<";
+            result += sSlotSeparator;
             result += renderWindSlot(forecasts[i]);
         }
 
