@@ -10,22 +10,22 @@
     </setting>
     <setting propertyKey="@Properties.forecastInterval1" title="@Strings.Interval1Title">
         <settingConfig type="list">
-            <listEntry value="1">1h</listEntry>
-            <listEntry value="2">2h</listEntry>
-            <listEntry value="3">3h</listEntry>
-            <listEntry value="4">4h</listEntry>
-            <listEntry value="5">5h</listEntry>
-            <listEntry value="6">6h</listEntry>
+            <listEntry value="1">@Strings.Hour1</listEntry>
+            <listEntry value="2">@Strings.Hour2</listEntry>
+            <listEntry value="3">@Strings.Hour3</listEntry>
+            <listEntry value="4">@Strings.Hour4</listEntry>
+            <listEntry value="5">@Strings.Hour5</listEntry>
+            <listEntry value="6">@Strings.Hour6</listEntry>
         </settingConfig>
     </setting>
     <setting propertyKey="@Properties.forecastInterval2" title="@Strings.Interval2Title">
         <settingConfig type="list">
-            <listEntry value="1">1h</listEntry>
-            <listEntry value="2">2h</listEntry>
-            <listEntry value="3">3h</listEntry>
-            <listEntry value="4">4h</listEntry>
-            <listEntry value="5">5h</listEntry>
-            <listEntry value="6">6h</listEntry>
+            <listEntry value="1">@Strings.Hour1</listEntry>
+            <listEntry value="2">@Strings.Hour2</listEntry>
+            <listEntry value="3">@Strings.Hour3</listEntry>
+            <listEntry value="4">@Strings.Hour4</listEntry>
+            <listEntry value="5">@Strings.Hour5</listEntry>
+            <listEntry value="6">@Strings.Hour6</listEntry>
         </settingConfig>
     </setting>
 </settings>
