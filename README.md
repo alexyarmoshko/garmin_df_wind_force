@@ -11,7 +11,7 @@ Wind Force shows current and forecast wind conditions on your watch during a Kay
 
 Depending on the data field slot size, it displays 1 to 3 time slots so you can see how conditions are forecast to change over the next few hours.
 
-```
+```text
 3/4NE             Single slot: speed 3, gust 4, NE
 3/4NE<5/6S        Two slots: current + 3h forecast
 3/4NE<5/6S<3/5SW  Three slots: current + 3h + 6h
@@ -22,7 +22,7 @@ Slot count adapts dynamically — if the text overflows the field width even at 
 
 ## Architecture
 
-```
+```text
 Watch (Kayak activity)
   |  compute() saves GPS to Storage
   v
@@ -53,7 +53,7 @@ Wind forecasts are sourced from [Met Eireann's HARMONIE-AROME model](https://dat
 
 ## Project Structure
 
-```
+```text
 garmin_df_wind_force/
   manifest.xml          # Connect IQ app manifest
   monkey.jungle         # Build configuration
@@ -155,7 +155,7 @@ bash proxy/test/e2e.sh http://localhost:8787   # against npm run dev
 Settings are configurable via Garmin Connect Mobile or Garmin Express:
 
 | Setting | Options | Default |
-|---------|---------|---------|
+| ------- | ------- | ------- |
 | Wind units | Beaufort, Knots, mph, km/h, m/s | Beaufort |
 | Forecast interval 1 | 1h - 6h | 3h |
 | Forecast interval 2 | 1h - 6h | 6h |
