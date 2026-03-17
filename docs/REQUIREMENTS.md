@@ -53,10 +53,15 @@ The following settings are configurable by the user via Garmin Connect Mobile or
 | Forecast interval 1 (S2) | 1h, 2h, 3h, 4h, 5h, 6h | 3h |
 | Forecast interval 2 (S3) | 1h, 2h, 3h, 4h, 5h, 6h | 6h |
 
-Forecast interval 2 must be greater than forecast interval 1. If the user sets them equal or
-interval 2 less than interval 1, the service clamps interval 2 to interval 1 + 1h. If the
-clamped value exceeds 6h, the third time slot is suppressed entirely and only two slots are
-displayed.
+Forecast interval 2 must be greater than forecast interval 1. When settings change,
+`onSettingsChanged()` validates the pair and writes corrected values back to
+`Application.Properties` so the Garmin Connect settings UI reflects the effective
+configuration. If interval 2 is less than or equal to interval 1, it is corrected to
+interval 1 + 1h. If interval 1 is 6h (leaving no valid interval 2), interval 1 is
+reduced to 5h and interval 2 set to 6h. The background service retains its own
+normalization as a safety net, though its behaviour differs in the `interval1 = 6`
+edge case: rather than reducing interval 1, it suppresses the third slot and emits
+a 2-slot request.
 
 Implementation note (2026-03-14):
 
@@ -66,20 +71,27 @@ Implementation note (2026-03-14):
 ## Architecture
 
 The watch cannot parse XML directly. A lightweight proxy backend translates the Met Éireann
-XML responses into compact JSON. The data field makes HTTP requests to this proxy via
-Connect IQ's `Communications.makeWebRequest()`, which routes transparently through the paired
-Android phone's internet connection via Garmin Connect. No companion Android app is required.
+XML responses into compact JSON. Connect IQ data fields cannot call `makeWebRequest()`
+directly — calls silently fail. Instead, a background service (`System.ServiceDelegate`)
+fires every 5 minutes via `Background.registerForTemporalEvent()`, reads the current GPS
+position from `Application.Storage`, and fetches forecast data from the proxy. The response
+is returned to the foreground process via `Background.exit()` and stored for display.
+Requests route through the paired phone's internet connection via Garmin Connect Mobile.
 
 ```text
 Watch Data Field (during Kayak activity)
-  → reads GPS position from Activity.Info
-  → determines whether a fetch is needed (see Fetch Strategy)
-  → makeWebRequest() to Cloudflare Worker proxy
-  → CF Worker checks KV cache
-     → hit: returns cached JSON
-     → miss: fetches XML from Met Éireann, parses, caches in KV, returns JSON
-  → watch displays data and stores in Application.Storage
-  → on request failure: displays last cached data with staleness indicator
+  → compute() reads GPS from Activity.Info, saves to Application.Storage
+  → Background Service fires every 5 minutes
+    → reads GPS position from Application.Storage
+    → reads settings from Application.Properties
+    → makeWebRequest() to Cloudflare Worker proxy
+    → CF Worker checks KV cache
+       → hit: returns cached JSON
+       → miss: fetches XML from Met Éireann, parses, caches in KV, returns JSON
+    → Background.exit() returns response to foreground
+  → foreground validates response against current settings
+  → stores forecast in Application.Storage, updates display
+  → on failure or stale settings: displays last valid cached data with staleness indicator
 ```
 
 ### Proxy Backend (Cloudflare Worker)
@@ -116,7 +128,7 @@ Hosted on Cloudflare Workers free tier (100,000 requests/day, KV storage include
 
 `GET /v1/model-status`
 - Returns the timestamp of the latest model run available (~50 bytes)
-- Used by the watch to cheaply detect whether cached data is stale
+- Available for external tooling or future use; the watch does not currently call this endpoint
 
 ### Proxy JSON Response Size
 
@@ -196,12 +208,13 @@ whatever data it has. The current position fetch (step 3) is the priority.
 
 When the activity starts and the data field initialises:
 
-1. Immediately attempt to fetch the current position forecast
-2. Fetch look-ahead points along the initial bearing (if bearing is not yet established,
-   skip look-ahead until sufficient GPS fixes are available)
-3. If the initial fetch fails entirely, display `?` in place of values, or fall back to the
-   last persisted data from `Application.Storage` from a previous activity session, with a
-   staleness indicator
+1. `getInitialView()` registers a 5-minute background temporal event via
+   `Background.registerForTemporalEvent(Duration(300))`. Using a Duration means the first
+   event fires immediately if more than 5 minutes have elapsed since the last run.
+2. `compute()` begins saving the current GPS position to `Application.Storage` on each call.
+3. The first background event reads the saved position and fetches from the proxy.
+4. Until the first successful fetch, the display shows `NO GPS` (no fix yet) or `---`
+   (GPS available but no cached forecast).
 
 ### Unavailable Data Display
 
