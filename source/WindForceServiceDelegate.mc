@@ -3,7 +3,6 @@ import Toybox.Application.Storage;
 import Toybox.Background;
 import Toybox.Communications;
 import Toybox.Lang;
-import Toybox.Math;
 import Toybox.System;
 
 (:background)
@@ -33,8 +32,8 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
         var units = getUnitsString();
         var slots = getSlotsString();
 
-        var rLat = roundCoord(latDeg);
-        var rLon = roundCoord(lonDeg);
+        var rLat = GeoUtils.roundCoord(latDeg);
+        var rLon = GeoUtils.roundCoord(lonDeg);
 
         var url = "https://api-wind-force.kayakshaver.com/v1/forecast";
         var params = {
@@ -82,12 +81,6 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
                 "rc" => responseCode
             });
         }
-    }
-
-    //! Round a coordinate to the nearest 0.025 degrees.
-    private function roundCoord(value as Double) as String {
-        var rounded = Math.round(value / 0.025).toDouble() * 0.025;
-        return rounded.format("%.3f");
     }
 
     //! Read wind units setting.

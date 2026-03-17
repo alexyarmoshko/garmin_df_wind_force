@@ -18,7 +18,8 @@ const CORS_HEADERS: Record<string, string> = {
 
 /** Round a coordinate to the nearest 0.025 deg (~2.5 km HARMONIE grid). */
 function roundCoord(value: number): string {
-  return (Math.round(value / 0.025) * 0.025).toFixed(3);
+  // Convert to integer grid steps first so midpoint rounding stays stable.
+  return (Math.round(value * 40) / 40).toFixed(3);
 }
 
 function jsonResponse(data: unknown, status = 200): Response {

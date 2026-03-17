@@ -1,5 +1,9 @@
 # Execution Changelog
 
+## 2026-03-17
+
+- Fixed coordinate midpoint rounding drift across the watch app and proxy: `roundCoord()` now rounds via integer 0.025-degree grid steps (`value * 40`) instead of dividing by `0.025`. This prevents exact midpoint values such as `53.3375` from falling just below the `.5` threshold due to floating-point precision and incorrectly rounding down in Monkey C.
+
 ## 2026-03-12
 
 - Created `docs/execution_plan.md` -- the initial execution plan covering all 6 milestones from project scaffolding through deployment.
@@ -175,3 +179,6 @@
   - Added proxy E2E tests (`proxy/test/e2e.sh`): 34 curl-based tests against the deployed proxy covering routing/error handling, response structure, unit conversions, slot selection, coordinate rounding, and CORS headers. Git Bash compatible (no `grep -P`, no `((var++))` arithmetic).
   - Added `vitest` dev dependency and `test`/`test:e2e` scripts to `proxy/package.json`. Updated `proxy/tsconfig.json` to include `test/` directory.
   - Updated `README.md` with testing section and proxy test directory in project structure.
+  - Added Monkey C unit tests (`test/Tests.mc`): 24 tests using `Toybox.Test` / `(:test)` annotation covering `StorageManager.roundCoord` (6), `StorageManager.splitFcKey` (5), `StorageManager.approxDistKm` (4), `DisplayRenderer.slotCount` (6), `DisplayRenderer.renderWindSlot` (3), and `WindData` initialization (1). Tests are stripped from release builds via `(:test)` annotation. Updated `monkey.jungle` to include `test/` in `base.sourcePath`.
+  - Updated `README.md` with watch app testing instructions and test directory description.
+  - Updated `RELEASE.md` with watch app unit test details.

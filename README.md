@@ -70,7 +70,7 @@ garmin_df_wind_force/
     src/                # Worker source code
     test/               # Unit tests (vitest) and E2E tests (curl)
     wrangler.toml       # Cloudflare deployment config
-  test/                 # GPX test routes for simulator
+  test/                 # Monkey C unit tests and GPX test routes
   docs/                 # Requirements and execution plan
 ```
 
@@ -122,6 +122,21 @@ npm run deploy      # Deploy to Cloudflare (wrangler deploy)
 ```
 
 ### Testing
+
+#### Watch App (Monkey C)
+
+```bash
+# Build with unit tests enabled
+monkeyc --unit-test -d instinct2x -f monkey.jungle -o bin/WindForce-test.prg -y ~/.ssh/developer_key
+
+# Run in simulator (24 tests)
+connectiq &
+monkeydo bin/WindForce-test.prg instinct2x -t
+```
+
+Tests cover `StorageManager` (coordinate rounding, key parsing, distance calculation), `DisplayRenderer` (slot count thresholds, wind slot formatting), and `WindData` initialization. The `(:test)` annotation strips all test code from release builds — zero impact on the 32 KB memory budget.
+
+#### Proxy (TypeScript)
 
 ```bash
 cd proxy
