@@ -80,17 +80,21 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 
 ## Context and Orientation
 
-This is a greenfield project. The repository currently contains only documentation files:
+The repository contains a working Connect IQ data field and a deployed Cloudflare Worker proxy:
 
     garmin_df_wind_force/
-      AGENTS.md          -- Agent instructions for the Garmin Connect IQ SDK location
-      CLAUDE.md          -- References AGENTS.md
-      .gitignore         -- Ignores .env, IDE files, agent config files
-      docs/
-        REQUIREMENTS.md  -- Full product requirements (the source of truth)
-        Marine-Beaufort-scale.png  -- Reference image of the Beaufort scale
+      AGENTS.md              -- Agent instructions for the Garmin Connect IQ SDK location
+      CLAUDE.md              -- References AGENTS.md
+      manifest.xml           -- Connect IQ app manifest (instinct2, instinct2x)
+      monkey.jungle          -- Build configuration
+      source/                -- Monkey C source files (app, view, service delegate, etc.)
+      resources/             -- Strings, settings, images
+      proxy/                 -- Cloudflare Worker (TypeScript)
+        src/                 -- Worker source code
+        wrangler.toml        -- Cloudflare deployment config
+      docs/                  -- Requirements, execution plan, changelog, reviews
 
-No source code exists yet. Two distinct codebases will be created:
+Two distinct codebases exist:
 
 1. The Connect IQ data field (Monkey C), which lives in the repository root following standard Connect IQ project layout.
 2. The Cloudflare Worker proxy (TypeScript), which lives in a `proxy/` subdirectory with its own `package.json` and `wrangler.toml`.
@@ -112,7 +116,7 @@ No source code exists yet. Two distinct codebases will be created:
 - IDE: Visual Studio Code with the Monkey C / Connect IQ extension
 - Connect IQ SDK: version 8.2.3, located at `~\AppData\Roaming\Garmin\ConnectIQ\Sdks\connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21\`
 - SDK samples: `<SDK_PATH>\samples\` and `~\repos\garmin-connectiq-apps\`
-- Target device: Instinct 2X Solar (device ID: `instinct2x`)
+- Target devices: Instinct 2X / 2X Solar (device ID: `instinct2x`), Instinct 2 (device ID: `instinct2`)
 - Display: 176 x 176 pixels, monochrome (2 colours: black and white), semi-octagon shape, no touch screen
 - Data field memory limit: 32,768 bytes (32 KB) -- this is tight and requires lean code
 - Cloudflare tooling: Wrangler CLI for Worker development and deployment
@@ -121,13 +125,13 @@ No source code exists yet. Two distinct codebases will be created:
 
 ### Milestone 1: Project Scaffolding and Static Data Field Proof-of-Concept
 
-This milestone establishes the Connect IQ project structure and proves that a data field can be built, run in the simulator, and display static text on the Instinct 2X screen. At the end, a developer can run the simulator, start a Kayak activity, and see "3(4)N" rendered in the data field slot.
+This milestone establishes the Connect IQ project structure and proves that a data field can be built, run in the simulator, and display static text on a supported device screen. At the end, a developer can run the simulator, start a Kayak activity, and see "3(4)N" rendered in the data field slot.
 
 **What to create:**
 
 The Connect IQ project follows a standard layout rooted in the repository directory. All paths below are relative to the repository root (`garmin_df_wind_force/`).
 
-`manifest.xml` -- the application manifest. It declares the app as type `datafield`, targets the `instinct2x` device, and requests the `Communications` permission (needed later for HTTP requests). The entry class points to the main application class. A unique UUID must be generated for the `id` attribute.
+`manifest.xml` -- the application manifest. It declares the app as type `datafield`, targets the `instinct2x` and `instinct2` devices, and requests the `Communications` permission (needed later for HTTP requests). The entry class points to the main application class. A unique UUID must be generated for the `id` attribute.
 
     <?xml version="1.0"?>
     <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
@@ -170,7 +174,7 @@ The Connect IQ project follows a standard layout rooted in the repository direct
 
 **How to validate:**
 
-Open the project in VS Code with the Connect IQ extension. Build for the `instinct2x` device. Launch the Connect IQ simulator. Select the Instinct 2X device in the simulator. Start a Kayak activity simulation. The Wind Force data field should appear in one of the data field slots displaying "3(4)N". If the text renders correctly and the simulator does not report errors, Milestone 1 is complete.
+Open the project in VS Code with the Connect IQ extension. Build for a supported device (e.g. `instinct2x`). Launch the Connect IQ simulator. Select the device in the simulator. Start a Kayak activity simulation. The Wind Force data field should appear in one of the data field slots displaying "3(4)N". If the text renders correctly and the simulator does not report errors, Milestone 1 is complete.
 
 Build command (from the VS Code Command Palette): `Monkey C: Build for Device` selecting `instinct2x`. Alternatively, from the terminal:
 
@@ -466,9 +470,8 @@ This milestone adds the configurable settings (wind units, forecast intervals) a
 - `getSlotsString()` clamps interval 2 to be greater than interval 1 and builds the proxy `slots` string.
 - This keeps settings logic in the background service and avoids an extra watch-side `SettingsManager` layer.
 
-`source/WindForceApp.mc` -- Milestone 5 may add `onSettingsChanged()` only as a UI hook.
-- Because data now comes exclusively from the background service, a settings change cannot trigger an immediate refetch from `compute()`.
-- The expected behaviour is: the existing display remains visible until the next background temporal event, then the service fetches new data using the latest settings.
+`source/WindForceApp.mc` -- `onSettingsChanged()` validates the interval pair (correcting invalid values back to `Application.Properties`), clears all cached forecasts via `StorageManager.clearAllForecasts()`, and requests a display update. The display shows `---` until the next background temporal event fetches new data using the updated settings. `onBackgroundData()` validates each response against the current `Application.Properties` values (units and slots strings) and discards responses fetched under stale settings.
+
 - A required validation step for this milestone is confirming on-device that `Application.Properties` changes made during an active activity are visible to the background service on the next temporal event.
 - If that validation fails, the mitigation options are: mirror settings into `Application.Storage` despite simulator limitations, require activity restart as a temporary limitation, or revisit the service/process communication design.
 
@@ -499,7 +502,7 @@ The forecast intervals (e.g., 3h, 6h) determine which entries the proxy returns.
 
 ### Milestone 6: Integration Testing, Optimisation, and Deployment
 
-This milestone is the final integration pass. At the end, the data field is ready for side-loading onto a physical Instinct 2X Solar for real-world testing on the water.
+This milestone is the final integration pass. At the end, the data field is ready for side-loading onto a physical device (Instinct 2X Solar or Instinct 2) for real-world testing on the water.
 
 **Memory optimisation (critical):**
 
@@ -531,7 +534,7 @@ The Instinct 2X data field memory limit is 32,768 bytes (32 KB). This is extreme
 **On-device deployment:**
 
 1. Build a release PRG file: use `Monkey C: Export Project` in VS Code or run the compiler with the `-r` (release) flag.
-2. Connect the Instinct 2X Solar via USB.
+2. Connect the Instinct 2/Instinct 2X Solar via USB.
 3. Copy the `.prg` file to the watch's `GARMIN/APPS/` directory.
 4. Disconnect the watch. The data field should appear in the data field picker for Kayak activities.
 5. Pair the watch with a phone running Garmin Connect Mobile. Verify that settings are configurable from the phone.
@@ -545,7 +548,7 @@ The Instinct 2X data field memory limit is 32,768 bytes (32 KB). This is extreme
 
 **How to validate:**
 
-The complete system is validated by performing an actual kayak paddle (or a walk/drive as a substitute) with the Instinct 2X Solar showing the Wind Force data field. The display should update with real Met Eireann wind data as the background service refreshes. Changing settings from the phone should take effect on the next background temporal event, subject to the on-device `Application.Properties` propagation validation described above.
+The complete system is validated by performing an actual kayak paddle (or a walk/drive as a substitute) with a supported device (Instinct 2X Solar or Instinct 2) showing the Wind Force data field. The display should update with real Met Eireann wind data as the background service refreshes. Changing settings from the phone should take effect on the next background temporal event, subject to the on-device `Application.Properties` propagation validation described above.
 
 ## Concrete Steps
 
@@ -580,14 +583,14 @@ Milestone 1 steps:
 
 Each milestone has its own validation section above. The overall acceptance criteria for the complete project:
 
-1. A Kayak activity on the Instinct 2X Solar displays the Wind Force data field with live Met Eireann wind data.
+1. A Kayak activity on a supported device (Instinct 2X Solar or Instinct 2) displays the Wind Force data field with live Met Eireann wind data.
 2. The display shows wind speed, gust speed, and wind direction label, with a `<` separator between adjacent time slots.
 3. Multiple time slots are shown when the data field occupies a wider screen slot.
 4. Wind units are configurable (Beaufort, Knots, mph, km/h, m/s) via Garmin Connect Mobile.
 5. Forecast intervals for the 2nd and 3rd time slots are configurable (1-6 hours).
 6. Data refreshes via background temporal events using the latest stored GPS position, and new model runs are picked up automatically on subsequent `/v1/forecast` fetches.
 7. Offline fallback uses the nearest cached forecast grid point. Look-ahead caching is deferred follow-up work and is not currently part of the implemented Milestone 4 architecture.
-8. Stale data is indicated with an asterisk or age in minutes.
+8. Stale data (older than 30 minutes) is indicated with a `*` prefix.
 9. When no GPS fix is available, the field shows `NO GPS`. When GPS is available but no forecast is cached for the current or nearest grid point, the field shows `---`.
 10. The data field fits within the 32 KB memory limit.
 11. The Cloudflare Worker proxy correctly translates Met Eireann XML to compact JSON and caches results.

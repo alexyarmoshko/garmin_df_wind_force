@@ -144,3 +144,18 @@
   - All responses now include an `api_version` field (`"v1"`) in the JSON body. Added to `ForecastResponse` and `ModelStatusResponse` types in `proxy/src/types.ts` and to `buildResponse()` / `handleModelStatus()` in `proxy/src/index.ts`.
   - Watch URL updated in `source/WindForceServiceDelegate.mc` to use `/v1/forecast`.
   - All endpoint references updated across `docs/REQUIREMENTS.md`, `docs/execution_plan.md`, `RELEASE.md`.
+
+## 2026-03-17
+
+- Addressed code review v13 findings (`docs/code_review.v13.md`):
+  1. Fixed invalid interval pairs allowed in settings: added `_validateIntervals()` to `WindForceApp.onSettingsChanged()`. When `forecastInterval2 <= forecastInterval1`, corrected values are written back to `Application.Properties` so the Garmin Connect settings UI reflects the effective configuration. If `forecastInterval1 = 6` (no valid pair possible), it is reduced to 5 with interval 2 set to 6. Normalization in `getSlotsString()` and `_currentSlotsString()` retained as a safety net. Updated `docs/REQUIREMENTS.md` to describe validation-at-change-time instead of silent normalization.
+  2. Fixed stale documentation describing superseded architecture:
+     - `docs/REQUIREMENTS.md` architecture section rewritten to describe background-service pattern (`System.ServiceDelegate`, `Background.registerForTemporalEvent`, `Background.exit`) instead of direct `makeWebRequest()` calls.
+     - `docs/REQUIREMENTS.md` `/v1/model-status` description updated: endpoint is available for external tooling, not called by the watch.
+     - `docs/REQUIREMENTS.md` initial launch section rewritten to describe temporal event registration and `NO GPS` / `---` display states instead of immediate fetches and look-ahead.
+     - `docs/execution_plan.md` Context and Orientation section updated from "no source code exists yet" to reflect the current repository structure.
+     - `docs/execution_plan.md` Milestone 5 `WindForceApp.mc` section updated to describe `onSettingsChanged()` clearing cached forecasts and validating intervals, replacing the stale "existing display remains visible" description.
+  3. Fixed device support documentation: `README.md` and `docs/execution_plan.md` updated to list both `instinct2` and `instinct2x` as supported devices, matching `manifest.xml`.
+- Addressed code review v13 follow-up findings:
+  4. Fixed inaccurate "equivalent normalization" wording in `docs/REQUIREMENTS.md`: the service-side safety net differs from the foreground correction in the `interval1 = 6` edge case (service suppresses the third slot rather than reducing interval 1). Documentation now describes this accurately.
+  5. Fixed remaining Instinct 2X-only references in `docs/execution_plan.md`: updated Milestone 1 description, manifest description, M1 validation, M6 description, M6 validation, and acceptance criterion 1 to reference both supported devices. Fixed stale staleness description in acceptance criterion 8 from "asterisk or age in minutes" to "`*` prefix".

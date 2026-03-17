@@ -1,6 +1,6 @@
 # Wind Force - Garmin Connect IQ Data Field
 
-A data field for Garmin Connect IQ that displays live wind forecast data during kayak activities. Designed for the Garmin Instinct 2X Solar.
+A data field for Garmin Connect IQ that displays live wind forecast data during kayak activities. Supports the Garmin Instinct 2X / 2X Solar and Instinct 2.
 
 ## What It Does
 
@@ -45,11 +45,11 @@ Connect IQ data fields cannot make direct HTTP requests. A background service (`
 
 Wind forecasts are sourced from [Met Eireann's HARMONIE-AROME model](https://data.gov.ie/en_GB/dataset/met-eireann-forecast-api), which covers Ireland, the UK, and a small area of northern France at approximately 2.5 km grid resolution. The model runs every 6 hours with hourly forecast intervals.
 
-## Target Device
+## Supported Devices
 
-- **Garmin Instinct 2X Solar** (device ID: `instinct2x`)
-- 176 x 176 px monochrome display
-- 32 KB data field memory limit
+- **Garmin Instinct 2X / 2X Solar** (device ID: `instinct2x`) — 176 x 176 px monochrome display
+- **Garmin Instinct 2** (device ID: `instinct2`) — 176 x 176 px monochrome display
+- 32 KB data field memory limit on both devices
 
 ## Project Structure
 
