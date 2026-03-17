@@ -80,7 +80,7 @@ garmin_df_wind_force/
 
 - [Garmin Connect IQ SDK](https://developer.garmin.com/connect-iq/overview/) 8.2.3+
 - VS Code with [Monkey C extension](https://marketplace.visualstudio.com/items?itemName=garmin.monkey-c)
-- Node.js and [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) (for the proxy)
+- Node.js (for the proxy; [Wrangler](https://developers.cloudflare.com/workers/wrangler/) is installed as a local devDependency)
 
 ### Build & Run (Data Field)
 
@@ -117,8 +117,8 @@ Or use VS Code:
 ```bash
 cd proxy
 npm install
-wrangler dev        # Local development
-wrangler deploy     # Deploy to Cloudflare
+npm run dev         # Local development (wrangler dev)
+npm run deploy      # Deploy to Cloudflare (wrangler deploy)
 ```
 
 ### Testing
@@ -132,7 +132,7 @@ npm run test:e2e    # E2E tests (curl against deployed proxy, 34 tests)
 The E2E script accepts an optional base URL for local testing:
 
 ```bash
-bash proxy/test/e2e.sh http://localhost:8787   # against wrangler dev
+bash proxy/test/e2e.sh http://localhost:8787   # against npm run dev
 ```
 
 ## Configuration
