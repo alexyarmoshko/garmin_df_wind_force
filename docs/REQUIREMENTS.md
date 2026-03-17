@@ -126,10 +126,6 @@ Hosted on Cloudflare Workers free tier (100,000 requests/day, KV storage include
 - KV cache key: `{rounded_lat}_{rounded_lon}_{model_run}`
 - KV TTL: 7 hours (model run interval is 6h, with buffer)
 
-`GET /v1/model-status`
-- Returns the timestamp of the latest model run available (~50 bytes)
-- Available for external tooling or future use; the watch does not currently call this endpoint
-
 ### Proxy JSON Response Size
 
 The response should contain hourly forecast entries from now out to the maximum configured
@@ -183,26 +179,18 @@ of them firing is sufficient.
 |---|---|---|
 | **Distance** | Boat has moved >1.5 km from the position of the last fetch | Current position + look-ahead points along current bearing |
 | **Time** | >30 minutes since the last successful fetch | Current position only (re-fetch at same location to get latest hourly slot) |
-| **Model run** | `/v1/model-status` reports a newer model run than the one in cache | Current position + look-ahead points (all cached data is from the old run) |
+| **Model run** | The `/v1/forecast` response contains a newer `model_run` than the one in cache | Automatically picked up on the next background fetch cycle |
 
-The model-status check is lightweight (~50 bytes) and should be performed before each full
-forecast fetch to avoid unnecessary requests when the model run has not changed. It can also
-be polled independently at a lower frequency (e.g. every 15 minutes) to detect new model runs
-while stationary.
+The proxy resolves the current model run internally when handling `/v1/forecast` requests. New model runs are detected automatically without a separate endpoint call.
 
 ### Fetch Sequence
 
-On each fetch cycle:
+The background service fires every 5 minutes and:
 
-1. Call `/v1/model-status` to get current model run timestamp
-2. If model run matches cached data and neither distance nor time trigger has fired, do nothing
-3. Otherwise, call `/v1/forecast?lat={lat}&lon={lon}` for the current position
-4. If connectivity permits, call `/v1/forecast` for each look-ahead point
-5. Store all responses in `Application.Storage` keyed by rounded grid coordinates
-6. Update the display with the current position's data
-
-Look-ahead fetches (step 4) are best-effort. If any fail, the data field continues with
-whatever data it has. The current position fetch (step 3) is the priority.
+1. Reads the current GPS position from `Application.Storage`
+2. Calls `/v1/forecast?lat={lat}&lon={lon}&units={units}&slots={slots}`
+3. Returns the response to the foreground via `Background.exit()`
+4. The foreground stores the data in `Application.Storage` and updates the display
 
 ### Initial Launch
 

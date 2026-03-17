@@ -31,7 +31,7 @@ function errorResponse(message: string, status: number): Response {
 
 // ── Unit conversion ───────────────────────────────────────────────────
 
-type WindUnit = "beaufort" | "knots" | "mph" | "kmh" | "mps";
+export type WindUnit = "beaufort" | "knots" | "mph" | "kmh" | "mps";
 
 const VALID_UNITS: Set<string> = new Set([
   "beaufort",
@@ -237,22 +237,6 @@ async function handleForecast(url: URL, env: Env): Promise<Response> {
   return jsonResponse(response);
 }
 
-// ── /v1/model-status ──────────────────────────────────────────────────
-
-async function handleModelStatus(env: Env): Promise<Response> {
-  const cached = await env.FORECAST_CACHE.get("latest_model_run");
-  if (cached) {
-    return jsonResponse({ api_version: API_VERSION, model_run: cached });
-  }
-
-  const modelRun = await fetchModelRunTimestamp();
-  await env.FORECAST_CACHE.put("latest_model_run", modelRun, {
-    expirationTtl: MODEL_STATUS_TTL,
-  });
-
-  return jsonResponse({ api_version: API_VERSION, model_run: modelRun });
-}
-
 // ── Worker entry point ────────────────────────────────────────────────
 
 export default {
@@ -276,10 +260,21 @@ export default {
     switch (url.pathname) {
       case "/v1/forecast":
         return handleForecast(url, env);
-      case "/v1/model-status":
-        return handleModelStatus(env);
       default:
         return errorResponse("Not found", 404);
     }
   },
 } satisfies ExportedHandler<Env>;
+
+// ── Exports for testing ──────────────────────────────────────────────
+
+export {
+  roundCoord,
+  mpsToBeaufort,
+  convertMps,
+  degToCardinal,
+  parseSlots,
+  selectCurrentEntry,
+  selectClosest,
+  buildResponse,
+};

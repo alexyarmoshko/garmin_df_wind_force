@@ -17,7 +17,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - [x] (2026-03-13) Milestone 3: Data field display engine (rendering, layouts, unit conversions)
 - [x] (2026-03-13) Milestone 4: Communication layer and fetch strategy
 - [x] (2026-03-15) Milestone 5: User settings and staleness handling
-- [ ] (2026-03-12) Milestone 6: Integration testing, optimisation, and deployment
+- [x] (2026-03-17) Milestone 6: Integration testing, optimisation, and deployment
 - [x] (2026-03-12) Plan review v1: addressed all 5 findings (Wrangler syntax, model-status polling, radians, properties.xml, PLANS.md compliance)
 
 ## Surprises & Discoveries
@@ -62,9 +62,9 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
   Rationale: `Activity.Info.currentHeading` and `Activity.Info.currentLocation` (via `Position.Location`) both use radians natively. Converting to degrees for internal math would introduce unnecessary conversions and risk unit-mismatch bugs. The proxy API expects degrees in query parameters, so conversion happens only at the HTTP call boundary. Confirmed in SDK docs at `doc/Toybox/Activity/Info.html`.
   Date/Author: 2026-03-12
 
-- Decision: Poll `/v1/model-status` at most once every 15 minutes, not on every compute cycle.
-  Rationale: `compute()` fires roughly once per second. Polling the proxy on every cycle would waste battery, generate excessive network traffic, and conflict with the requirements (REQUIREMENTS.md line 159-162 describes lower-frequency polling). A 15-minute interval matches the KV TTL on the proxy side and is sufficient to detect new model runs promptly.
-  Date/Author: 2026-03-12
+- Decision: Remove `/v1/model-status` endpoint. Model run detection handled internally by `/v1/forecast`.
+  Rationale: The watch never calls `/v1/model-status` — the background service only calls `/v1/forecast`, which internally resolves the current model run via KV cache. The separate endpoint added dead code and documentation overhead with no consumer. Removed in Milestone 6.
+  Date/Author: 2026-03-17
 
 - Decision: Move unit conversion, direction labels, Beaufort lookup, and slot selection from the watch to the proxy.
   Rationale: The Instinct 2X data field has a 32 KB memory limit. By performing unit conversion (Beaufort, knots, mph, km/h, m/s), Beaufort-scale lookup for gusts, cardinal direction labelling, and forecast interval selection on the proxy, the watch-side code becomes a thin display layer: `DisplayRenderer` only concatenates pre-computed strings with a literal `<` separator between slots, and `WindData` stores display-ready values (`windSpeed`, `gustSpeed`, `windDir`). The `/v1/forecast` endpoint accepts `units` and `slots` query parameters and returns exactly the entries the watch needs to render, with all values pre-converted. When the user changes the wind unit or interval settings, the watch triggers a refetch with the new parameters rather than re-computing locally. This maximises memory savings on the watch at the cost of slightly more proxy logic and an extra network round-trip when settings change.
@@ -76,7 +76,23 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 
 ## Outcomes & Retrospective
 
-(To be written at major milestone completions and at project end.)
+**Project completed 2026-03-17.** All 6 milestones delivered. The Wind Force data field is ready for side-loading onto physical devices and real-world testing.
+
+**What went well:**
+
+- The proxy-first architecture decision (moving unit conversion, slot selection, and direction labelling to the Cloudflare Worker) paid off handsomely. The watch-side code is a thin display layer at 13,260 bytes — 40.5% of the 32 KB limit, leaving ample headroom for future features.
+- The background service rework (Milestone 4, day 3) was the single largest surprise. Discovering that data fields cannot call `makeWebRequest()` directly required a significant architectural change, but the resulting design is cleaner: a simple 5-minute temporal event with GPS persisted via `Application.Storage`.
+- Iterative code reviews (13 rounds) caught subtle bugs early: cross-cycle callback corruption, settings race conditions, staleness indicator accuracy, and slot selection edge cases.
+
+**What was harder than expected:**
+
+- `Application.Storage` synchronisation between the main process and background service is unreliable in the simulator. This forced hardcoding the slot count to 3 and using `Application.Properties` for settings instead of Storage.
+- The strict type checker (`-l 3`) is aggressive with framework types like `Dictionary` vs `PersistableType`. Several methods required `(:typecheck(false))` annotations where the code is correct at runtime but the type system cannot verify it.
+
+**Deferred work:**
+
+- Look-ahead caching (fetching forecast data for points ahead of the current position) was deferred after the background-service rework. The current implementation fetches only the current position and relies on nearest-grid-point fallback.
+- Connect IQ Store publication (requires Garmin developer account approval and store listing assets).
 
 ## Context and Orientation
 
@@ -185,7 +201,7 @@ Then in the simulator, load `bin\WindForce.prg` and start a Kayak activity.
 
 ### Milestone 2: Cloudflare Worker Proxy
 
-This milestone builds the proxy backend that sits between the watch and Met Eireann. At the end, a developer can call the deployed Worker endpoint with a latitude/longitude and receive a compact JSON response containing hourly wind forecast data. They can also call `/v1/model-status` to get the latest model run timestamp.
+This milestone builds the proxy backend that sits between the watch and Met Eireann. At the end, a developer can call the deployed Worker endpoint with a latitude/longitude and receive a compact JSON response containing hourly wind forecast data.
 
 **Project structure** (all inside `proxy/` directory):
 
@@ -284,13 +300,6 @@ Processing steps:
 
 **XML Parsing**: Cloudflare Workers do not have a built-in DOM XML parser. Use a lightweight streaming/regex-based approach to extract the needed fields from the Met Eireann XML. The XML structure uses `<time>` elements with `from` and `to` attributes, containing `<location>` elements with child elements like `<windSpeed mps="7.2" beaufort="4" .../>` and `<windDirection deg="195" name="SSW"/>` and `<windGust mps="11.3"/>`. A simple parser that extracts these attribute values using regex or a small XML parser library (such as `fast-xml-parser`, which works in Workers) is sufficient.
 
-#### Endpoint: GET /v1/model-status
-
-1. Check KV for a key `latest_model_run`. If found and fresh (less than 15 minutes old), return it.
-2. Otherwise, fetch a minimal forecast from Met Eireann (e.g., for a fixed point like Dublin: lat=53.35, lon=-6.26) and extract the model run timestamp from the response.
-3. Store the timestamp in KV as `latest_model_run` with a TTL of 900 seconds (15 minutes).
-4. Return JSON: `{ "model_run": "2026-03-12T06:00:00Z" }`
-
 **How to validate:**
 
 After deploying with `wrangler deploy`:
@@ -302,10 +311,6 @@ Expected: a JSON object with `api_version` (`"v1"`), `model_run`, `units` (`"bea
     curl "https://api.kayakshaver.com/v1/forecast?lat=53.35&lon=-6.26&units=knots&slots=0"
 
 Expected: same structure but `units` is `"knots"`, speed values are in knots, and `forecasts` has exactly 1 entry.
-
-    curl "https://api.kayakshaver.com/v1/model-status"
-
-Expected: a JSON object with a single `model_run` field containing a UTC timestamp.
 
 For local development before deploying:
 
@@ -790,10 +795,10 @@ In `proxy/src/met-eireann.ts`:
 **Revision 4 (2026-03-12):** Milestone 2 completed. Cloudflare Worker proxy:
 
 - `proxy/package.json`, `proxy/tsconfig.json`, `proxy/wrangler.toml` (project scaffolding)
-- `proxy/src/types.ts` (Env, ForecastEntry, ForecastResponse, ModelStatusResponse interfaces)
+- `proxy/src/types.ts` (Env, RawForecastEntry, ForecastEntry, ForecastResponse, RawForecastResponse interfaces)
 - `proxy/src/met-eireann.ts` (XML fetch + parsing with fast-xml-parser; filters point forecasts where from===to; extracts harmonie model run timestamp)
-- `proxy/src/index.ts` (Worker entry point; GET /v1/forecast with coordinate rounding to 0.025 deg, KV caching with 7h TTL; GET /v1/model-status with 15min TTL; CORS headers; input validation)
-- Both endpoints tested locally via `wrangler dev`: `/v1/forecast?lat=53.35&lon=-6.26` returns api_version, units, and forecasts with wind_speed, gust_speed, wind_dir; `/v1/model-status` returns api_version and harmonie model run timestamp.
+- `proxy/src/index.ts` (Worker entry point; GET /v1/forecast with coordinate rounding to 0.025 deg, KV caching with 7h TTL, model run resolution with 15min TTL; CORS headers; input validation)
+- Endpoint tested locally via `wrangler dev`: `/v1/forecast?lat=53.35&lon=-6.26` returns api_version, units, and forecasts with wind_speed, gust_speed, wind_dir.
 - Error handling verified: missing params (400), invalid coords (400), unknown paths (404).
 - KV namespace ID is a placeholder; must run `wrangler kv namespace create FORECAST_CACHE` before deploying.
 

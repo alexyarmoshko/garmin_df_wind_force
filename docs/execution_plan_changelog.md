@@ -159,3 +159,19 @@
 - Addressed code review v13 follow-up findings:
   4. Fixed inaccurate "equivalent normalization" wording in `docs/REQUIREMENTS.md`: the service-side safety net differs from the foreground correction in the `interval1 = 6` edge case (service suppresses the third slot rather than reducing interval 1). Documentation now describes this accurately.
   5. Fixed remaining Instinct 2X-only references in `docs/execution_plan.md`: updated Milestone 1 description, manifest description, M1 validation, M6 description, M6 validation, and acceptance criterion 1 to reference both supported devices. Fixed stale staleness description in acceptance criterion 8 from "asterisk or age in minutes" to "`*` prefix".
+- **Milestone 6 completed**: Integration testing, optimisation, and deployment.
+  - Memory optimisation: removed dead code (unused `model_status` handler, orphaned `last_model_run` Storage write, unused `Application.Storage` import in `WindForceApp.mc`, unused `Math`/`Position`/`Storage` imports in `WindForceView.mc`). Release PRG: 13,260 bytes (40.5% of 32 KB limit).
+  - Proxy endpoint testing: verified all 5 unit conversions (beaufort, knots, mph, kmh, mps), 1/2/3-slot requests, and error handling (invalid params, missing params, wrong HTTP method) via curl.
+  - Removed `/v1/model-status` endpoint from proxy: never called by the watch. Model run resolution is handled internally by `/v1/forecast` via KV cache. Removed `handleModelStatus()` function, `ModelStatusResponse` type, and route. Updated `docs/REQUIREMENTS.md`, `docs/execution_plan.md`, and `RELEASE.md`.
+  - TypeScript type check (`tsc --noEmit`) passes clean.
+  - Release IQ package built successfully for all 3 device variants (006-B4394-00, 006-B3888-00, 006-B4071-00).
+  - Created `test/dublin_bay.gpx` for simulator GPS playback testing.
+  - Cloudflare Worker proxy confirmed deployed and responding at `api-wind-force.kayakshaver.com`.
+  - Updated `README.md` with Makefile build commands, side-loading instructions, and test directory.
+  - Updated `RELEASE.md` with version 1.0.0 release notes.
+  - Updated `docs/execution_plan.md` with Milestone 6 completion and Outcomes & Retrospective.
+  - Simulator GUI tests (GPS playback, no-GPS display, settings changes, staleness indicator) documented as manual testing steps.
+  - Added proxy unit tests (`proxy/test/index.test.ts`): 40 vitest tests covering `roundCoord`, `mpsToBeaufort`, `convertMps` (all 5 units), `degToCardinal`, `parseSlots`, `selectCurrentEntry`, `selectClosest`, and `buildResponse`. Exported pure functions from `proxy/src/index.ts` for testability. Removed unused `ModelStatusResponse` type.
+  - Added proxy E2E tests (`proxy/test/e2e.sh`): 34 curl-based tests against the deployed proxy covering routing/error handling, response structure, unit conversions, slot selection, coordinate rounding, and CORS headers. Git Bash compatible (no `grep -P`, no `((var++))` arithmetic).
+  - Added `vitest` dev dependency and `test`/`test:e2e` scripts to `proxy/package.json`. Updated `proxy/tsconfig.json` to include `test/` directory.
+  - Updated `README.md` with testing section and proxy test directory in project structure.

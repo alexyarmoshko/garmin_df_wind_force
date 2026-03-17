@@ -1,9 +1,6 @@
 import Toybox.Activity;
-import Toybox.Application.Storage;
 import Toybox.Graphics;
 import Toybox.Lang;
-import Toybox.Math;
-import Toybox.Position;
 import Toybox.WatchUi;
 
 class WindForceView extends WatchUi.DataField {
