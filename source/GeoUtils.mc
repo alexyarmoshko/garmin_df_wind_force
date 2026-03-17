@@ -1,6 +1,7 @@
 import Toybox.Lang;
 import Toybox.Math;
 
+(:background)
 module GeoUtils {
 
     //! Round a coordinate to the nearest 0.025-degree grid cell.
