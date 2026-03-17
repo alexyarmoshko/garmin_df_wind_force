@@ -68,7 +68,9 @@ garmin_df_wind_force/
   resources/            # Strings, settings, images
   proxy/                # Cloudflare Worker (TypeScript)
     src/                # Worker source code
+    test/               # Unit tests (vitest) and E2E tests (curl)
     wrangler.toml       # Cloudflare deployment config
+  test/                 # GPX test routes for simulator
   docs/                 # Requirements and execution plan
 ```
 
@@ -82,10 +84,33 @@ garmin_df_wind_force/
 
 ### Build & Run (Data Field)
 
-1. Open the project in VS Code
-2. `Ctrl+Shift+P` > **Monkey C: Build for Device** > select `instinct2x`
-3. `Ctrl+Shift+P` > **Monkey C: Run on Simulator**
-4. In the simulator: load a GPX file, start playback, then **Simulation > Trigger Background Event** to fetch data
+Create a `.env` file in the project root with your SDK paths:
+
+```env
+CIQ_HOME = $(HOME)/AppData/Roaming/Garmin/ConnectIQ
+SDK_HOME = $(CIQ_HOME)/Sdks/connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21
+KEY      = /c/Users/<you>/.ssh/developer_key
+```
+
+```bash
+make build    # Debug build (strict type checking, -l 3)
+make dist     # Release IQ package for all devices
+make clean    # Remove build artifacts
+make info     # Show app version, device targets, SDK path
+```
+
+Or use VS Code:
+
+1. `Ctrl+Shift+P` > **Monkey C: Build for Device** > select `instinct2x`
+2. `Ctrl+Shift+P` > **Monkey C: Run on Simulator**
+3. In the simulator: load `test/dublin_bay.gpx`, start playback, then **Simulation > Trigger Background Event** to fetch data
+
+### Side-loading to Device
+
+1. `make dist` to build the release IQ package
+2. Connect your Instinct 2 / 2X via USB
+3. Copy `bin/WindForce.prg` (from inside the IQ, or the device-specific build) to the watch's `GARMIN/APPS/` directory
+4. Disconnect the watch — Wind Force appears in the data field picker for Kayak activities
 
 ### Proxy Development
 
@@ -94,6 +119,20 @@ cd proxy
 npm install
 wrangler dev        # Local development
 wrangler deploy     # Deploy to Cloudflare
+```
+
+### Testing
+
+```bash
+cd proxy
+npm test            # Unit tests (vitest, 40 tests, runs offline)
+npm run test:e2e    # E2E tests (curl against deployed proxy, 34 tests)
+```
+
+The E2E script accepts an optional base URL for local testing:
+
+```bash
+bash proxy/test/e2e.sh http://localhost:8787   # against wrangler dev
 ```
 
 ## Configuration

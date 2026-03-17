@@ -30,8 +30,3 @@ export interface RawForecastResponse {
   model_run: string;
   forecasts: RawForecastEntry[];
 }
-
-export interface ModelStatusResponse {
-  api_version: string;
-  model_run: string;
-}

@@ -1,5 +1,4 @@
 import Toybox.Application;
-import Toybox.Application.Storage;
 import Toybox.Background;
 import Toybox.Lang;
 import Toybox.System;
@@ -133,20 +132,6 @@ class WindForceApp extends Application.AppBase {
                         var payloadDict = payload as Dictionary;
                         payloadDict.put("fetch_ts", Time.now().value());
                         StorageManager.storeForecast(rLat, rLon, payloadDict);
-
-                        var mr = (payload as Dictionary)["model_run"];
-                        if (mr instanceof String) {
-                            Storage.setValue("last_model_run", mr);
-                        }
-                    }
-                }
-            } else if ("model_status".equals(kind)) {
-                var mr = dict["model_run"];
-                if (mr instanceof String) {
-                    var prev = Storage.getValue("last_model_run");
-                    if (!(prev instanceof String) || !(prev as String).equals(mr)) {
-                        Storage.setValue("last_model_run", mr);
-                        Storage.setValue("last_fetch_ts", 0);
                     }
                 }
             }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="WindForceTest"
+     xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Dublin Bay Test Route</name>
+    <trkseg>
+      <trkpt lat="53.3400" lon="-6.2200"><ele>0</ele><time>2026-03-17T10:00:00Z</time></trkpt>
+      <trkpt lat="53.3410" lon="-6.2180"><ele>0</ele><time>2026-03-17T10:00:30Z</time></trkpt>
+      <trkpt lat="53.3420" lon="-6.2160"><ele>0</ele><time>2026-03-17T10:01:00Z</time></trkpt>
+      <trkpt lat="53.3430" lon="-6.2140"><ele>0</ele><time>2026-03-17T10:01:30Z</time></trkpt>
+      <trkpt lat="53.3440" lon="-6.2120"><ele>0</ele><time>2026-03-17T10:02:00Z</time></trkpt>
+      <trkpt lat="53.3450" lon="-6.2100"><ele>0</ele><time>2026-03-17T10:02:30Z</time></trkpt>
+      <trkpt lat="53.3460" lon="-6.2080"><ele>0</ele><time>2026-03-17T10:03:00Z</time></trkpt>
+      <trkpt lat="53.3470" lon="-6.2060"><ele>0</ele><time>2026-03-17T10:03:30Z</time></trkpt>
+      <trkpt lat="53.3480" lon="-6.2040"><ele>0</ele><time>2026-03-17T10:04:00Z</time></trkpt>
+      <trkpt lat="53.3490" lon="-6.2020"><ele>0</ele><time>2026-03-17T10:04:30Z</time></trkpt>
+      <trkpt lat="53.3500" lon="-6.2000"><ele>0</ele><time>2026-03-17T10:05:00Z</time></trkpt>
+      <trkpt lat="53.3510" lon="-6.1980"><ele>0</ele><time>2026-03-17T10:05:30Z</time></trkpt>
+      <trkpt lat="53.3520" lon="-6.1960"><ele>0</ele><time>2026-03-17T10:06:00Z</time></trkpt>
+      <trkpt lat="53.3530" lon="-6.1940"><ele>0</ele><time>2026-03-17T10:06:30Z</time></trkpt>
+      <trkpt lat="53.3540" lon="-6.1920"><ele>0</ele><time>2026-03-17T10:07:00Z</time></trkpt>
+      <trkpt lat="53.3550" lon="-6.1900"><ele>0</ele><time>2026-03-17T10:07:30Z</time></trkpt>
+      <trkpt lat="53.3560" lon="-6.1880"><ele>0</ele><time>2026-03-17T10:08:00Z</time></trkpt>
+      <trkpt lat="53.3570" lon="-6.1860"><ele>0</ele><time>2026-03-17T10:08:30Z</time></trkpt>
+      <trkpt lat="53.3580" lon="-6.1840"><ele>0</ele><time>2026-03-17T10:09:00Z</time></trkpt>
+      <trkpt lat="53.3590" lon="-6.1820"><ele>0</ele><time>2026-03-17T10:09:30Z</time></trkpt>
+      <trkpt lat="53.3600" lon="-6.1800"><ele>0</ele><time>2026-03-17T10:10:00Z</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>
