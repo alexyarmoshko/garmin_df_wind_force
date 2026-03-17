@@ -116,8 +116,8 @@ class WindForceView extends WatchUi.DataField {
         var lonDeg = _fetchMgr.currentLonDeg;
 
         // Try exact rounded coordinate match
-        var rLat = StorageManager.roundCoord(latDeg);
-        var rLon = StorageManager.roundCoord(lonDeg);
+        var rLat = GeoUtils.roundCoord(latDeg);
+        var rLon = GeoUtils.roundCoord(lonDeg);
         var exact = StorageManager.loadForecast(rLat, rLon);
         if (exact != null) {
             return exact;

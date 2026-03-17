@@ -121,14 +121,6 @@ module StorageManager {
         return [] as Array<String>;
     }
 
-    //! Round a coordinate value to the nearest 0.025 degrees (matching proxy).
-    //! @param value Coordinate in degrees
-    //! @return Rounded value as a 3-decimal-place string
-    function roundCoord(value as Double) as String {
-        var rounded = Math.round(value / 0.025).toDouble() * 0.025;
-        return rounded.format("%.3f");
-    }
-
     //! Parse a forecast key "fc_{lat}_{lon}" into [lat, lon] strings.
     //! Returns null if the key format is invalid.
     function splitFcKey(key as String) as Array<String>? {
