@@ -28,7 +28,7 @@
   - GET `/forecast?lat=&lon=` -- rounds coords to 0.025 deg, KV cache with 7h TTL, returns JSON with model_run + hourly forecasts.
   - GET `/model-status` -- returns latest harmonie model run timestamp, KV cache with 15min TTL.
   - CORS headers, input validation, error handling all verified.
-  - Both endpoints tested locally via `wrangler dev` + `curl`.
+  - Both endpoints tested locally via `npm run dev` + `curl`.
   - Updated `.gitignore` with `node_modules/` and `.wrangler/`.
 - Addressed code review v1 findings (`docs/code_review.v1.md`):
   1. Fixed `/forecast` dropping the current hour's slot — changed time filter from `now` to `now - 1h`.

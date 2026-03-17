@@ -230,7 +230,7 @@ This milestone builds the proxy backend that sits between the watch and Met Eire
     pattern = "api.kayakshaver.com/*"
     zone_name = "kayakshaver.com"
 
-The KV namespace ID is obtained by running `wrangler kv namespace create FORECAST_CACHE` after Wrangler is set up.
+The KV namespace ID is obtained by running `npx wrangler kv namespace create FORECAST_CACHE` from the `proxy/` directory.
 
 #### Endpoint: GET /v1/forecast
 
@@ -302,7 +302,7 @@ Processing steps:
 
 **How to validate:**
 
-After deploying with `wrangler deploy`:
+After deploying with `npm run deploy`:
 
     curl "https://api.kayakshaver.com/v1/forecast?lat=53.35&lon=-6.26&units=beaufort&slots=0,3,6"
 
@@ -316,7 +316,7 @@ For local development before deploying:
 
     cd proxy
     npm install
-    wrangler dev
+    npm run dev
 
 Then use `http://localhost:8787/v1/forecast?lat=53.35&lon=-6.26` to test locally.
 
@@ -546,7 +546,7 @@ The Instinct 2X data field memory limit is 32,768 bytes (32 KB). This is extreme
 
 **Cloudflare Worker production deployment:**
 
-1. Run `wrangler deploy` from the `proxy/` directory.
+1. Run `npm run deploy` from the `proxy/` directory.
 2. Verify the endpoints are accessible from the public internet.
 3. Test the Worker responds correctly with the curl commands from Milestone 2.
 4. Monitor Worker analytics in the Cloudflare dashboard for error rates and request counts.
@@ -602,7 +602,7 @@ Each milestone has its own validation section above. The overall acceptance crit
 
 ## Idempotence and Recovery
 
-All source files are created fresh in this plan and tracked in git. Running the build multiple times produces the same output. The Cloudflare Worker can be deployed repeatedly with `wrangler deploy` without side effects (it overwrites the previous version). KV cache entries expire via TTL and do not accumulate unboundedly.
+All source files are created fresh in this plan and tracked in git. Running the build multiple times produces the same output. The Cloudflare Worker can be deployed repeatedly with `npm run deploy` without side effects (it overwrites the previous version). KV cache entries expire via TTL and do not accumulate unboundedly.
 
 If a milestone is partially completed and needs to be restarted, the developer can `git stash` or `git checkout` the incomplete changes and begin the milestone from scratch using the instructions in this plan.
 
@@ -764,7 +764,7 @@ In `proxy/src/met-eireann.ts`:
 **External dependencies:**
 
 - Garmin Connect IQ SDK 8.2.3 (already installed)
-- Cloudflare Wrangler CLI (`npm install -g wrangler`)
+- Cloudflare Wrangler CLI (installed as local devDependency via `npm install` in `proxy/`)
 - Node.js (for Wrangler and Worker development)
 - `fast-xml-parser` npm package (for XML parsing in the Worker, ~50 KB, well within Worker limits)
 
@@ -798,9 +798,9 @@ In `proxy/src/met-eireann.ts`:
 - `proxy/src/types.ts` (Env, RawForecastEntry, ForecastEntry, ForecastResponse, RawForecastResponse interfaces)
 - `proxy/src/met-eireann.ts` (XML fetch + parsing with fast-xml-parser; filters point forecasts where from===to; extracts harmonie model run timestamp)
 - `proxy/src/index.ts` (Worker entry point; GET /v1/forecast with coordinate rounding to 0.025 deg, KV caching with 7h TTL, model run resolution with 15min TTL; CORS headers; input validation)
-- Endpoint tested locally via `wrangler dev`: `/v1/forecast?lat=53.35&lon=-6.26` returns api_version, units, and forecasts with wind_speed, gust_speed, wind_dir.
+- Endpoint tested locally via `npm run dev`: `/v1/forecast?lat=53.35&lon=-6.26` returns api_version, units, and forecasts with wind_speed, gust_speed, wind_dir.
 - Error handling verified: missing params (400), invalid coords (400), unknown paths (404).
-- KV namespace ID is a placeholder; must run `wrangler kv namespace create FORECAST_CACHE` before deploying.
+- KV namespace ID is a placeholder; must run `npx wrangler kv namespace create FORECAST_CACHE` before deploying.
 
 **Revision 5 (2026-03-13):** Milestone 3 completed. Display engine:
 
