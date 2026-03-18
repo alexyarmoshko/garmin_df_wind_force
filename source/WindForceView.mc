@@ -1,6 +1,9 @@
 import Toybox.Activity;
+import Toybox.Application.Storage;
+import Toybox.Background;
 import Toybox.Graphics;
 import Toybox.Lang;
+import Toybox.Time;
 import Toybox.WatchUi;
 
 class WindForceView extends WatchUi.DataField {
@@ -21,6 +24,45 @@ class WindForceView extends WatchUi.DataField {
 
     function compute(info as Activity.Info) as Void {
         _fetchMgr.updatePosition(info);
+
+        if (_fetchMgr.gpsJustAcquired) {
+            _fetchMgr.gpsJustAcquired = false;
+            scheduleImmediateFetch();
+        }
+    }
+
+    //! Schedule a background fetch at the earliest time Garmin allows.
+    //! Replaces the active Duration registration with a one-shot Moment.
+    //! The repeating schedule is restored in onBackgroundData().
+    private function scheduleImmediateFetch() as Void {
+        var lastTime = Background.getLastTemporalEventTime();
+        if (lastTime != null) {
+            // Schedule at lastTime + 5 min. If that moment is in the
+            // past, the event fires immediately.
+            Background.registerForTemporalEvent(
+                (lastTime as Time.Moment).add(new Time.Duration(5 * 60)));
+        } else {
+            // No prior event in this session — fire immediately.
+            Background.registerForTemporalEvent(Time.now());
+        }
+    }
+
+    //! Reset all session state: cache, GPS keys, and FetchManager flags.
+    //! Called from both onTimerReset() and onBackgroundData(session_end).
+    function resetSession() as Void {
+        StorageManager.clearAllForecasts();
+        Storage.deleteValue("bg_lat");
+        Storage.deleteValue("bg_lon");
+        _fetchMgr.hasPosition = false;
+        _fetchMgr.gpsJustAcquired = false;
+    }
+
+    //! Foreground safety net for activity-end cache cleanup.
+    //! Fires when the activity timer is reset at the end of a session.
+    function onTimerReset() as Void {
+        resetSession();
+        Background.deleteTemporalEvent();
+        WatchUi.requestUpdate();
     }
 
     function onUpdate(dc as Dc) as Void {

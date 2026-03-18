@@ -1,4 +1,5 @@
 import Toybox.Application;
+import Toybox.Application.Storage;
 import Toybox.Background;
 import Toybox.Lang;
 import Toybox.System;
@@ -7,6 +8,10 @@ import Toybox.WatchUi;
 
 (:background)
 class WindForceApp extends Application.AppBase {
+
+    // Foreground-only: holds reference to the view for session cleanup.
+    // Typed as Object? to avoid referencing WindForceView in background scope.
+    private var _view as Object? = null;
 
     function initialize() {
         AppBase.initialize();
@@ -25,7 +30,12 @@ class WindForceApp extends Application.AppBase {
         // Register background temporal event (5-min interval).
         // Using Duration means it fires immediately if >5 min since last run.
         Background.registerForTemporalEvent(new Time.Duration(5 * 60));
-        return [new WindForceView()];
+        // Register for activity-completion events so the background
+        // service can signal session-end cache cleanup.
+        Background.registerForActivityCompletedEvent();
+        var view = new WindForceView();
+        _view = view;
+        return [view];
     }
 
     //! Called when settings change via Garmin Connect Mobile / Express.
@@ -60,6 +70,13 @@ class WindForceApp extends Application.AppBase {
             Application.Properties.setValue("forecastInterval1", 5);
             Application.Properties.setValue("forecastInterval2", 6);
         }
+    }
+
+    //! Access the stored view reference (typed as Object? to stay
+    //! background-safe). Exists as a type-checked accessor so the
+    //! compiler sees _view as used.
+    private function _getView() as Object? {
+        return _view;
     }
 
     //! Return the service delegate for background web requests.
@@ -105,6 +122,24 @@ class WindForceApp extends Application.AppBase {
             var dict = data as Dictionary;
             var kind = dict["kind"];
 
+            if ("session_end".equals(kind)) {
+                // Activity completed — clear cached forecasts, session keys,
+                // and FetchManager state. Stop the background schedule.
+                // Storage cleanup runs unconditionally so it works even when
+                // the app was inactive and _view is null (deferred delivery).
+                // May be redundant with onTimerReset() — that is intentional.
+                StorageManager.clearAllForecasts();
+                Storage.deleteValue("bg_lat");
+                Storage.deleteValue("bg_lon");
+                var view = _getView();
+                if (view != null) {
+                    (view as WindForceView).resetSession();
+                }
+                Background.deleteTemporalEvent();
+                WatchUi.requestUpdate();
+                return;
+            }
+
             if ("forecast".equals(kind)) {
                 // Reject responses fetched under stale settings by comparing
                 // the actual units/slots used in the request against current
@@ -116,6 +151,8 @@ class WindForceApp extends Application.AppBase {
                     var curUnits = _currentUnitsString();
                     var curSlots = _currentSlotsString();
                     if (!curUnits.equals(rUnits) || !curSlots.equals(rSlots)) {
+                        // Restore the repeating schedule even on rejection
+                        Background.registerForTemporalEvent(new Time.Duration(5 * 60));
                         WatchUi.requestUpdate();
                         return;
                     }
@@ -136,6 +173,12 @@ class WindForceApp extends Application.AppBase {
                 }
             }
         }
+
+        // Restore the 5-minute repeating schedule after every background
+        // event. This is essential because the GPS-triggered one-shot
+        // Moment replaces the auto-repeating Duration. In the normal case
+        // (no GPS override), this is a harmless re-registration.
+        Background.registerForTemporalEvent(new Time.Duration(5 * 60));
         WatchUi.requestUpdate();
     }
 

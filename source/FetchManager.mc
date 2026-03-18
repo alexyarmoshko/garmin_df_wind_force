@@ -12,6 +12,10 @@ class FetchManager {
     var currentLonDeg as Double = 0.0d;
     var hasPosition as Boolean = false;
 
+    // Set to true on the no-GPS → GPS transition so the view can
+    // schedule an immediate background fetch.
+    var gpsJustAcquired as Boolean = false;
+
     function initialize() {
     }
 
@@ -36,6 +40,11 @@ class FetchManager {
 
         currentLatDeg = latRad * 180.0d / Math.PI;
         currentLonDeg = lonRad * 180.0d / Math.PI;
+
+        // Detect no-GPS → GPS transition
+        if (!hasPosition) {
+            gpsJustAcquired = true;
+        }
         hasPosition = true;
 
         // Persist position for the background service to read
