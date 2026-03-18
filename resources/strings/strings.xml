@@ -10,9 +10,9 @@
     <string id="Interval2Title">Forecast Interval 2</string>
     <!-- Display strings -->
     <string id="NoGps">NO GPS</string>
-    <string id="NoForecast">---</string>
+    <string id="NoForecastSlot">-/-</string>
     <string id="StalePrefix">*</string>
-    <string id="SlotSeparator">&lt;</string>
+    <string id="SlotSeparator">&#8226;</string>
     <!-- Time interval labels -->
     <string id="Hour1">1h</string>
     <string id="Hour2">2h</string>

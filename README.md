@@ -12,10 +12,12 @@ Wind Force shows current and forecast wind conditions on your watch during a Kay
 Depending on the data field slot size, it displays 1 to 3 time slots so you can see how conditions are forecast to change over the next few hours.
 
 ```text
-3/4NE             Single slot: speed 3, gust 4, NE
-3/4NE<5/6S        Two slots: current + 3h forecast
-3/4NE<5/6S<3/5SW  Three slots: current + 3h + 6h
-*3/4NE<5/6S       Stale data (>30 min old, prefixed with *)
+3/4NE              Single slot: speed 3, gust 4, NE
+3/4NE•5/6S         Two slots: current + 3h forecast
+3/4NE•5/6S•3/5SW   Three slots: current + 3h + 6h
+*3/4NE•5/6S        Stale data (>30 min old, prefixed with *)
+-/-                No forecast yet (1 slot)
+-/-•-/-•-/-        No forecast yet (3 slots)
 ```
 
 Slot count adapts dynamically — if the text overflows the field width even at the smallest font, slots are reduced until it fits.
@@ -142,7 +144,7 @@ Tests cover `StorageManager` (coordinate rounding, key parsing, distance calcula
 
 ```bash
 cd proxy
-npm test            # Unit tests (vitest, 40 tests, runs offline)
+npm test            # Unit tests (vitest, 41 tests, runs offline)
 npm run test:e2e    # E2E tests (curl against deployed proxy, 34 tests)
 ```
 

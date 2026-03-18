@@ -13,14 +13,14 @@ module DisplayRenderer {
 
     // Translatable display strings (loaded once via init)
     var sNoGps as String = "";
-    var sNoForecast as String = "";
+    var sNoForecastSlot as String = "";
     var sStalePrefix as String = "";
     var sSlotSeparator as String = "";
 
     //! Load translatable strings from resources. Call once at startup.
     function init() as Void {
         sNoGps = WatchUi.loadResource($.Rez.Strings.NoGps) as String;
-        sNoForecast = WatchUi.loadResource($.Rez.Strings.NoForecast) as String;
+        sNoForecastSlot = WatchUi.loadResource($.Rez.Strings.NoForecastSlot) as String;
         sStalePrefix = WatchUi.loadResource($.Rez.Strings.StalePrefix) as String;
         sSlotSeparator = WatchUi.loadResource($.Rez.Strings.SlotSeparator) as String;
     }
@@ -40,16 +40,22 @@ module DisplayRenderer {
     //! @param forecasts Array of WindData (may be empty)
     //! @param fetchTimestamp Unix epoch seconds of last successful fetch (0 if never)
     //! @param hasPosition Whether GPS position is available
+    //! @param slots Number of time slots to display
     function formatLayout(
         forecasts as Array<WindData>,
         fetchTimestamp as Number,
-        hasPosition as Boolean
+        hasPosition as Boolean,
+        slots as Number
     ) as String {
         if (forecasts.size() == 0) {
             if (!hasPosition) {
                 return sNoGps;
             }
-            return sNoForecast;
+            var noData = sNoForecastSlot;
+            for (var i = 1; i < slots; i++) {
+                noData += sSlotSeparator + sNoForecastSlot;
+            }
+            return noData;
         }
 
         var result = "";
