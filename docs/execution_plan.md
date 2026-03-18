@@ -19,6 +19,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - [x] (2026-03-15) Milestone 5: User settings and staleness handling
 - [x] (2026-03-17) Milestone 6: Integration testing, optimisation, and deployment
 - [x] (2026-03-12) Plan review v1: addressed all 5 findings (Wrangler syntax, model-status polling, radians, properties.xml, PLANS.md compliance)
+- [ ] Milestone 7: Immediate background fetch on first GPS fix and activity-completion cache pruning (addresses `docs/field_test.v1.md` and `docs/field_test.v2.md`)
 
 ## Surprises & Discoveries
 
@@ -74,6 +75,14 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
   Rationale: Connect IQ data fields cannot make direct HTTP requests — `Communications.makeWebRequest()` silently fails (no traffic, no callback). The background service pattern is mandatory: `Background.registerForTemporalEvent()` fires a `ServiceDelegate.onTemporalEvent()` every 5 minutes, which calls `makeWebRequest()` and returns data via `Background.exit()` → `AppBase.onBackgroundData()`. GPS position is persisted to `Application.Storage` by `compute()` so the background service can read it. This replaces the original FetchManager direct-fetch design, and removes the need for ForecastService module and LookAheadCallback class.
   Date/Author: 2026-03-14
 
+- Decision: Schedule an immediate temporal event on first GPS fix instead of waiting for the next 5-minute polling interval.
+  Rationale: Field testing (`docs/field_test.v1.md`) revealed that after starting an activity, the data field showed `---` for up to 5 minutes because GPS acquisition does not trigger a fetch. By re-registering the temporal event via `Background.registerForTemporalEvent()` with the earliest legal `Time.Moment` when GPS is first acquired, the background service fires as soon as Garmin allows. The 5-minute repeating schedule is then restored in `onBackgroundData()` by re-registering with `Duration(5 * 60)`. Alternative approaches (phone-app message trigger, pure polling) were considered and rejected: the phone-app approach requires a companion integration that is disproportionate to the problem, and pure polling already has the observed UX drawback.
+  Date/Author: 2026-03-18
+
+- Decision: Clear forecast cache on activity completion using dual hooks (`onActivityCompleted` + `onTimerReset`), not `AppBase.onStop()`.
+  Rationale: Field testing (`docs/field_test.v2.md`) revealed that cached forecasts from a previous activity survive into the next activity, causing stale data to display. `AppBase.onStop()` was rejected because it fires on any app exit (memory pressure, watchface change), not just activity completion — tying cache pruning to generic shutdown would clear data in cases unrelated to session boundaries. `ServiceDelegate.onActivityCompleted()` is the semantically correct activity-completion hook. `DataField.onTimerReset()` is added as a foreground safety net in case the background event is delayed or unavailable on certain device/activity flows. Both hooks call the same cleanup logic; if one fires before the other, the second is a harmless no-op.
+  Date/Author: 2026-03-18
+
 ## Outcomes & Retrospective
 
 **Project completed 2026-03-17.** All 6 milestones delivered. The Wind Force data field is ready for side-loading onto physical devices and real-world testing.
@@ -93,6 +102,10 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 
 - Look-ahead caching (fetching forecast data for points ahead of the current position) was deferred after the background-service rework. The current implementation fetches only the current position and relies on nearest-grid-point fallback.
 - Connect IQ Store publication (requires Garmin developer account approval and store listing assets).
+
+**Post-release work:**
+
+- Milestone 7 was added after field testing revealed two UX issues: (1) the data field showed `---` for up to 5 minutes after GPS lock because GPS acquisition does not trigger a fetch (`docs/field_test.v1.md`), and (2) cached forecasts from a previous activity survive into the next activity, displaying stale data (`docs/field_test.v2.md`).
 
 ## Context and Orientation
 
@@ -555,6 +568,124 @@ The Instinct 2X data field memory limit is 32,768 bytes (32 KB). This is extreme
 
 The complete system is validated by performing an actual kayak paddle (or a walk/drive as a substitute) with a supported device (Instinct 2X Solar or Instinct 2) showing the Wind Force data field. The display should update with real Met Eireann wind data as the background service refreshes. Changing settings from the phone should take effect on the next background temporal event, subject to the on-device `Application.Properties` propagation validation described above.
 
+### Milestone 7: Immediate Background Fetch on First GPS Fix and Activity-Completion Cache Pruning
+
+This milestone addresses two field-test findings. The first, documented in `docs/field_test.v1.md`, is that the data field showed `---` for a prolonged time after acquiring GPS because GPS acquisition does not trigger a forecast fetch — only the 5-minute background temporal event can initiate a web request. The second, documented in `docs/field_test.v2.md`, is that forecast data cached during one activity survives into the next activity, causing the data field to display stale but locally valid forecast data from a previous session instead of starting clean.
+
+At the end of this milestone, two new behaviours exist:
+
+1. When the data field first acquires GPS (or reacquires it after a loss), it schedules a background temporal event at the earliest time permitted by Garmin's 5-minute constraint. If no temporal event has fired in the current session, the event fires immediately. If the last event was recent, the event fires as soon as the 5-minute minimum elapses. After the immediate fetch completes, the normal 5-minute repeating schedule resumes.
+
+2. When an activity ends, the forecast cache and session-scoped storage keys are cleared. The next activity starts with an empty cache and must acquire GPS and fetch fresh data before displaying any forecast. Two independent cleanup hooks ensure robustness: a background `onActivityCompleted` event (primary) and a foreground `onTimerReset` callback (safety net).
+
+**Garmin constraint: `Background.registerForTemporalEvent()` and the 5-minute minimum**
+
+`Background.registerForTemporalEvent()` accepts either a `Time.Duration` (repeating interval) or a `Time.Moment` (one-shot at a specific point in time). Only one temporal registration can be active at a time; a new registration replaces the previous one.
+
+The Duration form auto-repeats: after the event fires, it is automatically rescheduled at the same interval. The Moment form is one-shot: after it fires, there is no automatic re-scheduling. Because this milestone replaces the Duration registration with a one-shot Moment when GPS is acquired, the repeating schedule must be explicitly restored afterward.
+
+Garmin enforces a minimum interval of 5 minutes between temporal events. `Background.getLastTemporalEventTime()` returns the `Time.Moment` when the last temporal event actually fired, or `null` if no event has fired in the current session. When scheduling a Moment that is in the past (relative to the current time), the system fires the event immediately. This means the scheduling pattern is:
+
+    var lastTime = Background.getLastTemporalEventTime();
+    if (lastTime != null) {
+        // Schedule at lastTime + 5min. If that moment is in the past,
+        // the event fires immediately. If it is in the future, the event
+        // fires at that time.
+        Background.registerForTemporalEvent(
+            lastTime.add(new Time.Duration(5 * 60)));
+    } else {
+        // No prior event in this session — fire immediately.
+        Background.registerForTemporalEvent(Time.now());
+    }
+
+**Files to modify:**
+
+`source/FetchManager.mc` — add a `gpsJustAcquired` flag to detect the no-GPS-to-GPS transition.
+
+- Add `var gpsJustAcquired as Boolean = false;` as a public instance variable.
+- In `updatePosition()`, before setting `hasPosition = true`, check whether `hasPosition` is currently `false`. If so, this is a GPS acquisition transition: set `gpsJustAcquired = true`. The flag is read and reset by the caller (`WindForceView.compute()`).
+
+`source/WindForceView.mc` — check the flag after each `updatePosition()` call and schedule an immediate background fetch when GPS is first acquired.
+
+- Add `import Toybox.Background;` and `import Toybox.Time;`.
+- In `compute()`, after `_fetchMgr.updatePosition(info)`, check `_fetchMgr.gpsJustAcquired`. If `true`, reset the flag to `false` and call a new private method `scheduleImmediateFetch()`.
+- `scheduleImmediateFetch()` implements the scheduling pattern described above: it calls `Background.getLastTemporalEventTime()` and registers either `Time.now()` (if no prior event) or `lastTime.add(Duration(5*60))` (if a prior event exists). This replaces the currently active Duration registration with a one-shot Moment, which triggers the background service as soon as Garmin allows.
+
+`source/WindForceApp.mc` — restore the repeating 5-minute schedule after every background event and handle activity-completion cleanup.
+
+- In `getInitialView()`, add `Background.registerForActivityCompletedEvent()` alongside the existing temporal event registration. This tells the system to call `onActivityCompleted()` on the service delegate when the current activity finishes.
+- In `onBackgroundData()`, after processing the response and before calling `WatchUi.requestUpdate()`, call `Background.registerForTemporalEvent(new Time.Duration(5 * 60))`. This re-registration is essential because the GPS-triggered one-shot Moment replaces the auto-repeating Duration. Without re-registration, no further background events would fire after the one-shot completes. In the normal case (no GPS override), re-registering the Duration is redundant but harmless — it replaces the existing auto-repeating registration with an equivalent one.
+- In `onBackgroundData()`, add handling for `{"kind": "session_end"}`: call `StorageManager.clearAllForecasts()`, delete `bg_lat` and `bg_lon` from `Application.Storage`, and call `WatchUi.requestUpdate()`. Do not re-register the temporal event after a session-end signal — the activity is over and no further fetches are needed until the next activity starts.
+
+`source/WindForceServiceDelegate.mc` — add activity-completion callback.
+
+- Add `onActivityCompleted(activity as Activity.Info) as Void`. This callback fires in the background process when an activity is saved or discarded. It calls `Background.exit({"kind" => "session_end"})` to signal the foreground to clear the session cache. The actual cleanup is performed by `onBackgroundData()` in the foreground to keep the clearing logic in one place and avoid scope issues with `StorageManager` module availability in the background build.
+
+`source/WindForceView.mc` — add foreground safety net for activity-end cleanup.
+
+- Add `onTimerReset() as Void`. This `WatchUi.DataField` callback fires in the foreground when the activity timer is reset at the end of a session. It calls `StorageManager.clearAllForecasts()`, deletes `bg_lat` and `bg_lon` from `Application.Storage`, resets `_fetchMgr.hasPosition` to `false` and `_fetchMgr.gpsJustAcquired` to `false`, and calls `WatchUi.requestUpdate()`. This is a defence-in-depth measure: if the `onActivityCompleted` background event is delayed, unavailable, or behaves differently on certain device/activity flows, the foreground cleanup still runs.
+
+**Session cleanup scope:**
+
+The following Storage keys are cleared when an activity ends:
+
+- All `fc_*` forecast entries and `fc_keys` — via `StorageManager.clearAllForecasts()`
+- `bg_lat` and `bg_lon` — the GPS position persisted for the background service
+
+The background request metadata keys (`bg_rLat`, `bg_rLon`, `bg_reqUnits`, `bg_reqSlots`) are transient values written by each `onTemporalEvent()` call and overwritten on the next background cycle. They do not need explicit cleanup.
+
+**Why `AppBase.onStop()` is not used:**
+
+`onStop()` is a generic app termination/suspension callback, not an activity-completion signal. Using it for cache pruning would clear forecasts when the app exits for any reason (e.g., system memory pressure, watchface change), not just when an activity ends. The field test analysis in `docs/field_test.v2.md` specifically recommends against `onStop()` for this reason.
+
+**Sequence of events after this milestone:**
+
+1. Activity starts. `getInitialView()` registers `Duration(5 * 60)` — first background event scheduled in ~5 minutes.
+2. GPS acquires a fix (e.g., 30 seconds after start). `compute()` detects the transition. `scheduleImmediateFetch()` calls `getLastTemporalEventTime()` → `null` (no event has fired yet). Registers `Time.now()`. The one-shot Moment fires immediately, replacing the pending Duration.
+3. Background service reads GPS from Storage, calls `/v1/forecast`, returns data via `Background.exit()`.
+4. `onBackgroundData()` processes the forecast, stores it, re-registers `Duration(5 * 60)`, and calls `WatchUi.requestUpdate()`. The display updates from `---` to live wind data.
+5. Subsequent background events fire every ~5 minutes via the restored Duration registration.
+
+Alternative scenario: GPS acquires a fix 6 minutes after start. The first Duration event fires at t=5min (background service gets no GPS from Storage, returns error, `onBackgroundData()` re-registers Duration). At t=6min, GPS acquired. `getLastTemporalEventTime()` returns t=5min. Registers t=5min + 5min = t=10min. The one-shot fires at t=10min. This is the same time the Duration would have fired anyway — the Garmin 5-minute constraint means no improvement is possible here. The fix primarily benefits the common case where GPS locks before the first temporal event.
+
+**Activity-end sequence:**
+
+1. User saves or discards the activity.
+2. `onTimerReset()` fires in the foreground data field. It clears all cached forecasts and session keys, resets `_fetchMgr.hasPosition` to `false`, and requests a display update. The display reverts to `NO GPS`.
+3. `onActivityCompleted(activity)` fires in the background service delegate. It calls `Background.exit({"kind" => "session_end"})`.
+4. `onBackgroundData()` receives the session-end signal, calls `StorageManager.clearAllForecasts()`, deletes `bg_lat`/`bg_lon`, and requests a display update. If `onTimerReset()` already cleared the cache, this is a no-op (clearing an already-empty cache is harmless).
+5. The next activity start calls `getInitialView()`, which re-registers both the temporal event and the activity-completed event. The display starts clean.
+
+The two cleanup hooks are intentionally redundant. If one fires before the other, the second is a harmless no-op. If one fails to fire on a particular device or activity flow, the other still cleans up.
+
+**How to validate:**
+
+In the simulator (GPS fix trigger):
+
+1. Start a Kayak activity without GPS simulation. The display should show `NO GPS`.
+2. Begin GPS simulation (load a GPX file). The display should transition to `---`.
+3. Trigger a background event via `Simulation > Trigger Background Event`. The display should update to live wind data.
+4. In the simulator console, verify that the temporal event registration was called when GPS was acquired (if debug logging is enabled).
+
+On a physical device (GPS fix trigger):
+
+1. Start a Kayak activity outdoors. Note the time when the display transitions from `NO GPS` to `---`.
+2. Observe the time when wind data first appears. With this fix, data should appear shortly after the `---` state (subject to the 5-minute constraint from the last temporal event). Without this fix, data could take up to 5 minutes from the activity start.
+3. Walk indoors until GPS is lost (`NO GPS`). Walk back outdoors. Verify that wind data reappears shortly after GPS is reacquired.
+
+In the simulator (activity-end cache pruning):
+
+1. Start a Kayak activity with GPS simulation. Trigger a background event to fetch forecast data. Verify wind data is displayed.
+2. Stop and save the activity.
+3. Start a new Kayak activity. The display should show `NO GPS` (or `---` once GPS is acquired), not the cached forecast from the previous activity.
+4. Confirm that `Application.Storage` no longer contains `fc_*` entries or `bg_lat`/`bg_lon` keys from the previous session.
+
+On a physical device (activity-end cache pruning):
+
+1. Complete a kayak paddle with wind data displayed.
+2. Save the activity. Note whether the display clears.
+3. Start a new activity. Verify that stale data from the previous session is not displayed — the field should show `NO GPS` or `---` until a fresh fetch completes.
+
 ## Concrete Steps
 
 (To be updated as each milestone is implemented. The initial concrete steps for Milestone 1 are below.)
@@ -599,6 +730,8 @@ Each milestone has its own validation section above. The overall acceptance crit
 9. When no GPS fix is available, the field shows `NO GPS`. When GPS is available but no forecast is cached for the current or nearest grid point, the field shows `---`.
 10. The data field fits within the 32 KB memory limit.
 11. The Cloudflare Worker proxy correctly translates Met Eireann XML to compact JSON and caches results.
+12. When GPS is first acquired (or reacquired after a loss), a background fetch is triggered at the earliest time permitted by Garmin's 5-minute constraint, rather than waiting for the next scheduled polling interval.
+13. When an activity ends (saved or discarded), the forecast cache and session storage keys are cleared. The next activity starts with an empty cache and does not display stale data from a previous session.
 
 ## Idempotence and Recovery
 
@@ -665,6 +798,8 @@ In `source/WindForceView.mc`:
         function compute(info as Activity.Info) as Void
         function onLayout(dc as Graphics.Dc) as Void
         function onUpdate(dc as Graphics.Dc) as Void
+        function onTimerReset() as Void                    // Milestone 7: activity-end cache cleanup
+        private function scheduleImmediateFetch() as Void  // Milestone 7: GPS-triggered one-shot
     }
 
 In `source/DisplayRenderer.mc`:
@@ -681,6 +816,7 @@ In `source/FetchManager.mc`:
         var currentLatDeg as Double
         var currentLonDeg as Double
         var hasPosition as Boolean
+        var gpsJustAcquired as Boolean   // set true on no-GPS → GPS transition
         function updatePosition(info as Activity.Info) as Void
     }
 
@@ -710,6 +846,7 @@ In `source/WindForceServiceDelegate.mc`:
     class WindForceServiceDelegate extends System.ServiceDelegate {
         function onTemporalEvent() as Void
         function onForecastReceived(responseCode as Number, data as Dictionary or String or Null) as Void
+        function onActivityCompleted(activity as Activity.Info) as Void  // Milestone 7: session-end signal
     }
 
 **Cloudflare Worker (TypeScript):**
@@ -847,3 +984,18 @@ Changes across milestones:
 - Corrected interface signatures for `WindForceApp`, `WindForceView`, `FetchManager`, `StorageManager`, `DisplayRenderer`, and `WindForceServiceDelegate` to match the current codebase.
 - Documented that look-ahead fetching is deferred follow-up work, not part of the current Milestone 4 implementation.
 - Added an explicit on-device validation requirement for `Application.Properties` propagation from foreground settings changes to the background service during an active activity.
+
+**Revision 9 (2026-03-18):** Added Milestone 7 — immediate background fetch on first GPS fix.
+
+- Added Milestone 7 section addressing the field-test finding in `docs/field_test.v1.md`: after GPS acquisition, the data field showed `---` for up to 5 minutes because GPS lock does not trigger a fetch.
+- Implementation: `FetchManager` gains a `gpsJustAcquired` flag set on the no-GPS → GPS transition. `WindForceView.compute()` detects this flag and calls `scheduleImmediateFetch()`, which registers a one-shot `Time.Moment` via `Background.registerForTemporalEvent()` at the earliest legal time (respecting the 5-minute minimum via `Background.getLastTemporalEventTime()`). `WindForceApp.onBackgroundData()` re-registers `Duration(5 * 60)` after every background event to restore the repeating schedule.
+- Added Decision Log entry for the GPS-fix trigger approach.
+- Updated Progress, Interfaces (FetchManager, WindForceView), Validation and Acceptance (criterion 12), and Outcomes & Retrospective (post-release work).
+
+**Revision 10 (2026-03-18):** Extended Milestone 7 with activity-completion cache pruning.
+
+- Addresses `docs/field_test.v2.md`: cached forecasts from a previous activity survive into the next activity, displaying stale data.
+- Implementation: `WindForceApp.getInitialView()` registers `Background.registerForActivityCompletedEvent()`. `WindForceServiceDelegate` gains `onActivityCompleted()` which signals the foreground via `Background.exit({"kind" => "session_end"})`. `WindForceApp.onBackgroundData()` handles the session-end signal by calling `StorageManager.clearAllForecasts()` and deleting `bg_lat`/`bg_lon`. `WindForceView` gains `onTimerReset()` as a foreground safety net performing the same cleanup.
+- Added Decision Log entry explaining why `onActivityCompleted` + `onTimerReset` were chosen over `AppBase.onStop()`.
+- Updated Milestone 7 title, introduction, files-to-modify, sequence-of-events, and validation sections.
+- Updated Progress, Interfaces (WindForceView, WindForceServiceDelegate), Validation and Acceptance (criterion 13), and Outcomes & Retrospective.

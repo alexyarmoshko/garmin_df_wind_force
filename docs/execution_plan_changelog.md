@@ -1,5 +1,16 @@
 # Execution Changelog
 
+## 2026-03-18
+
+- **Milestone 7 planned**: Immediate background fetch on first GPS fix and activity-completion cache pruning.
+  - **Part 1 — GPS fix trigger** (addresses `docs/field_test.v1.md`): data field showed `---` for up to 5 minutes after GPS lock because GPS acquisition does not trigger a background fetch.
+    - Design: `FetchManager` gains a `gpsJustAcquired` flag set on the no-GPS → GPS transition. `WindForceView.compute()` detects the flag and calls `scheduleImmediateFetch()`, which re-registers the temporal event at the earliest legal `Time.Moment` using `Background.getLastTemporalEventTime()` + 5 min (or `Time.now()` if no prior event). `WindForceApp.onBackgroundData()` re-registers `Duration(5 * 60)` after every background event to restore the repeating schedule after the one-shot.
+  - **Part 2 — Activity-end cache pruning** (addresses `docs/field_test.v2.md`): cached forecasts from a previous activity survive into the next session, displaying stale data.
+    - Design: dual cleanup hooks for robustness. Primary: `Background.registerForActivityCompletedEvent()` registered in `getInitialView()`; `WindForceServiceDelegate.onActivityCompleted()` signals foreground via `Background.exit({"kind" => "session_end"})`; `onBackgroundData()` handles session-end by calling `StorageManager.clearAllForecasts()` and deleting `bg_lat`/`bg_lon`. Safety net: `WindForceView.onTimerReset()` performs the same cleanup from the foreground data-field lifecycle. Both hooks are intentionally redundant — if one fires before the other, the second is a harmless no-op.
+    - `AppBase.onStop()` was explicitly rejected as a cleanup trigger because it fires on any app exit, not just activity completion.
+  - Files to modify: `source/FetchManager.mc`, `source/WindForceView.mc`, `source/WindForceApp.mc`, `source/WindForceServiceDelegate.mc`.
+  - Updated `docs/execution_plan.md`: Progress, Decision Log (2 entries), Milestone 7 section, Interfaces (WindForceView, WindForceServiceDelegate, FetchManager), Validation criteria 12–13, Outcomes & Retrospective, Revision History (Revisions 9–10).
+
 ## 2026-03-17
 
 - Fixed coordinate midpoint rounding drift across the watch app and proxy: `roundCoord()` now rounds via integer 0.025-degree grid steps (`value * 40`) instead of dividing by `0.025`. This prevents exact midpoint values such as `53.3375` from falling just below the `.5` threshold due to floating-point precision and incorrectly rounding down in Monkey C.
