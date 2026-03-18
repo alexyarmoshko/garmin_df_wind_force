@@ -103,6 +103,17 @@ describe("convertMps", () => {
       expect(convertMps(0, u)).toBe(0);
     }
   });
+
+  it("always returns integers for all units with fractional m/s inputs", () => {
+    const units: WindUnit[] = ["beaufort", "knots", "mph", "kmh", "mps"];
+    const fractionalInputs = [0.1, 1.7, 3.33, 5.55, 7.89, 10.123, 15.6, 20.99, 33.3];
+    for (const u of units) {
+      for (const mps of fractionalInputs) {
+        const result = convertMps(mps, u);
+        expect(Number.isInteger(result), `convertMps(${mps}, "${u}") = ${result} is not integer`).toBe(true);
+      }
+    }
+  });
 });
 
 // ── degToCardinal ────────────────────────────────────────────────────

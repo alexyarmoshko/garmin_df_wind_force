@@ -90,7 +90,7 @@ class WindForceView extends WatchUi.DataField {
         var font = Graphics.FONT_XTINY;
         while (slots > 0) {
             var forecasts = parseForecastEntries(dict, slots);
-            text = DisplayRenderer.formatLayout(forecasts, ts, _fetchMgr.hasPosition);
+            text = DisplayRenderer.formatLayout(forecasts, ts, _fetchMgr.hasPosition, slots);
             font = selectFont(dc, text);
             if (dc.getTextWidthInPixels(text, font) <= maxWidth) {
                 break;

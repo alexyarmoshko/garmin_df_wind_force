@@ -4,7 +4,7 @@ This Execution Plan is a living document. The sections Progress, Surprises & Dis
 
 ## Purpose / Big Picture
 
-After this work is complete, a kayaker wearing a Garmin Instinct 2X Solar will be able to add a "Wind Force" data field to their Kayak activity screen. During a paddle, the field will display the current wind speed (in Beaufort or other units), gust speed, and wind direction (as a cardinal compass label), all derived from Met Eireann's HARMONIE weather model. Depending on the data field slot size chosen by the user, the display shows one, two, or three time slots separated by `<`, so the paddler can see how conditions are forecast to change over the next few hours.
+After this work is complete, a kayaker wearing a Garmin Instinct 2X Solar will be able to add a "Wind Force" data field to their Kayak activity screen. During a paddle, the field will display the current wind speed (in Beaufort or other units), gust speed, and wind direction (as a cardinal compass label), all derived from Met Eireann's HARMONIE weather model. Depending on the data field slot size chosen by the user, the display shows one, two, or three time slots separated by `•`, so the paddler can see how conditions are forecast to change over the next few hours.
 
 The data flows from Met Eireann's XML API through a Cloudflare Worker proxy (which translates XML to compact JSON and caches results) to the watch via the paired phone's internet connection. When connectivity is lost, previously fetched data is displayed with a staleness indicator. Nearest-grid offline fallback is implemented now; look-ahead caching was deferred after the background-service rework and remains planned follow-up work.
 
@@ -68,7 +68,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
   Date/Author: 2026-03-17
 
 - Decision: Move unit conversion, direction labels, Beaufort lookup, and slot selection from the watch to the proxy.
-  Rationale: The Instinct 2X data field has a 32 KB memory limit. By performing unit conversion (Beaufort, knots, mph, km/h, m/s), Beaufort-scale lookup for gusts, cardinal direction labelling, and forecast interval selection on the proxy, the watch-side code becomes a thin display layer: `DisplayRenderer` only concatenates pre-computed strings with a literal `<` separator between slots, and `WindData` stores display-ready values (`windSpeed`, `gustSpeed`, `windDir`). The `/v1/forecast` endpoint accepts `units` and `slots` query parameters and returns exactly the entries the watch needs to render, with all values pre-converted. When the user changes the wind unit or interval settings, the watch triggers a refetch with the new parameters rather than re-computing locally. This maximises memory savings on the watch at the cost of slightly more proxy logic and an extra network round-trip when settings change.
+  Rationale: The Instinct 2X data field has a 32 KB memory limit. By performing unit conversion (Beaufort, knots, mph, km/h, m/s), Beaufort-scale lookup for gusts, cardinal direction labelling, and forecast interval selection on the proxy, the watch-side code becomes a thin display layer: `DisplayRenderer` only concatenates pre-computed strings with a `•` (bullet) separator between slots, and `WindData` stores display-ready values (`windSpeed`, `gustSpeed`, `windDir`). The `/v1/forecast` endpoint accepts `units` and `slots` query parameters and returns exactly the entries the watch needs to render, with all values pre-converted. When the user changes the wind unit or interval settings, the watch triggers a refetch with the new parameters rather than re-computing locally. This maximises memory savings on the watch at the cost of slightly more proxy logic and an extra network round-trip when settings change.
   Date/Author: 2026-03-13
 
 - Decision: Use background service (`System.ServiceDelegate`) for all web requests instead of calling `makeWebRequest()` from `compute()`.
@@ -81,6 +81,10 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 
 - Decision: Clear forecast cache on activity completion using dual hooks (`onActivityCompleted` + `onTimerReset`), not `AppBase.onStop()`.
   Rationale: Field testing (`docs/field_test.v2.md`) revealed that cached forecasts from a previous activity survive into the next activity, causing stale data to display. `AppBase.onStop()` was rejected because it fires on any app exit (memory pressure, watchface change), not just activity completion — tying cache pruning to generic shutdown would clear data in cases unrelated to session boundaries. `ServiceDelegate.onActivityCompleted()` is the semantically correct activity-completion hook. `DataField.onTimerReset()` is added as a foreground safety net in case the background event is delayed or unavailable on certain device/activity flows. Both hooks call the same cleanup logic; if one fires before the other, the second is a harmless no-op.
+  Date/Author: 2026-03-18
+
+- Decision: All wind and gust speed values are rounded to integers end-to-end — proxy returns integers, watch stores and displays integers.
+  Rationale: Smaller watch displays (e.g., narrow data field slots on future devices) cannot accommodate decimal digits, and integer precision is sufficient for paddling water activities. The proxy's `convertMps()` applies `Math.round()` for all unit conversions (knots, mph, km/h, m/s) and `mpsToBeaufort()` returns an integer by table lookup. The watch-side `WindData` type stores values as Monkey C `Number` (integer). This guarantee is enforced by a dedicated proxy unit test that verifies `Number.isInteger()` across all units with fractional m/s inputs.
   Date/Author: 2026-03-18
 
 ## Outcomes & Retrospective
@@ -136,7 +140,7 @@ Two distinct codebases exist:
 - **KV (Key-Value store)**: Cloudflare's distributed key-value storage. Used here to cache parsed forecast JSON so the Worker does not re-fetch from Met Eireann on every request.
 - **HARMONIE-AROME**: The numerical weather prediction model run by Met Eireann. It covers Ireland, the UK, and a small area of northern France. Grid resolution is approximately 2.5 km. It runs every 6 hours (00, 06, 12, 18 UTC) and produces hourly forecasts out to 90 hours.
 - **Beaufort scale**: A scale from 0 to 12 that categorises wind speed by its observed effects at sea. See `docs/Marine-Beaufort-scale.png` for the full table.
-- **Slot separator**: Adjacent time slots on the display are separated by a literal `<` character. This is a pure formatting separator with no directional meaning.
+- **Slot separator**: Adjacent time slots on the display are separated by a `•` (bullet) character. This is a pure formatting separator with no directional meaning.
 - **makeWebRequest()**: The Connect IQ API method `Communications.makeWebRequest()` that sends an HTTP request from the watch. The request is actually routed through the paired phone's internet connection via Bluetooth and the Garmin Connect Mobile app.
 - **Application.Storage**: A persistent key-value store on the watch that survives app restarts. Used to cache forecast data between fetch cycles and across activity sessions.
 
@@ -300,7 +304,7 @@ Processing steps:
     - `gust_speed`: gust speed as a rounded integer in the requested unit.
     - `wind_dir`: cardinal/intercardinal direction label (one of N, NE, E, SE, S, SW, W, NW). Computed from the raw degree value using 8 sectors of 45 degrees each.
 
-    The `forecasts` array contains exactly the number of entries requested via `slots` (1 to 3), in the same order as the offsets. The watch renders these directly with a literal `<` separator between adjacent slots, without any selection or conversion logic.
+    The `forecasts` array contains exactly the number of entries requested via `slots` (1 to 3), in the same order as the offsets. The watch renders these directly with a `•` (bullet) separator between adjacent slots, without any selection or conversion logic.
 
     Unit conversion formulas (from raw m/s):
     - `beaufort`: standard Beaufort scale lookup (same breakpoints as the current `mpsToBeaufort` table).
@@ -358,7 +362,7 @@ These thresholds should be constants that can be tuned after on-device testing.
 `source/DisplayRenderer.mc` -- a module containing the rendering logic. Because unit conversion, Beaufort lookup, direction labelling, and slot selection are all performed by the proxy, this module is a thin formatter that concatenates pre-computed values:
 
 - `function renderWindSlot(data)` returns a string like "3/4NE" for one time slot. It reads the pre-converted `windSpeed`, `gustSpeed`, and `windDir` directly from the `WindData` object — no conversion needed.
-- `function formatLayout(forecasts)` concatenates the forecast entries into the final display string. A literal `<` separator is inserted between consecutive slots. No slot count parameter is needed — the `forecasts` array already contains exactly the entries requested via the `slots` query parameter. No `units` parameter is needed since values are already converted. No interval selection logic is needed since the proxy performs it.
+- `function formatLayout(forecasts, fetchTimestamp, hasPosition, slots)` concatenates the forecast entries into the final display string. A `•` (bullet) separator is inserted between consecutive slots. When no forecast data is available, it builds a slot-aware placeholder (`-/-•-/-•-/-` for 3 slots) using the `slots` parameter. No `units` parameter is needed since values are already converted. No interval selection logic is needed since the proxy performs it.
 - `function slotCount(width)` determines 1/2/3-slot layout from the field width. The current implementation uses this only for display truncation; the background service still requests 3 slots because cross-process slot-count sync is unresolved.
 - **Removed from watch**: `convertSpeed()`, `mpsToBeaufort()`, `directionLabel()`, `veerBackSymbol()` — all handled by the proxy or no longer applicable.
 
@@ -488,22 +492,21 @@ This milestone adds the configurable settings (wind units, forecast intervals) a
 - `getSlotsString()` clamps interval 2 to be greater than interval 1 and builds the proxy `slots` string.
 - This keeps settings logic in the background service and avoids an extra watch-side `SettingsManager` layer.
 
-`source/WindForceApp.mc` -- `onSettingsChanged()` validates the interval pair (correcting invalid values back to `Application.Properties`), clears all cached forecasts via `StorageManager.clearAllForecasts()`, and requests a display update. The display shows `---` until the next background temporal event fetches new data using the updated settings. `onBackgroundData()` validates each response against the current `Application.Properties` values (units and slots strings) and discards responses fetched under stale settings.
+`source/WindForceApp.mc` -- `onSettingsChanged()` validates the interval pair (correcting invalid values back to `Application.Properties`), clears all cached forecasts via `StorageManager.clearAllForecasts()`, and requests a display update. The display shows the no-forecast placeholder (`-/-•-/-•-/-`) until the next background temporal event fetches new data using the updated settings. `onBackgroundData()` validates each response against the current `Application.Properties` values (units and slots strings) and discards responses fetched under stale settings.
 
 - A required validation step for this milestone is confirming on-device that `Application.Properties` changes made during an active activity are visible to the background service on the next temporal event.
 - If that validation fails, the mitigation options are: mirror settings into `Application.Storage` despite simulator limitations, require activity restart as a temporary limitation, or revisit the service/process communication design.
 
 **Staleness indicator:**
 
-In `source/DisplayRenderer.mc`, `formatLayout()` accepts a per-forecast `fetchTimestamp`. If `Time.now().value() - fetchTimestamp > 1800` (30 minutes), prefix the display string with `*`. The staleness threshold constant (1800 seconds) is defined in one place. Note: `formatLayout()` needs neither a `units` parameter nor interval selection logic - the proxy returns exactly the display-ready entries with pre-converted values. Adjacent time slots are separated by a literal `<` character.
+In `source/DisplayRenderer.mc`, `formatLayout()` accepts a per-forecast `fetchTimestamp`. If `Time.now().value() - fetchTimestamp > 1800` (30 minutes), prefix the display string with `*`. The staleness threshold constant (1800 seconds) is defined in one place. Note: `formatLayout()` needs neither a `units` parameter nor interval selection logic - the proxy returns exactly the display-ready entries with pre-converted values. Adjacent time slots are separated by a `•` (bullet) character.
 
 **Unavailable data display:**
 
 Current implementation status:
 
 - When no GPS fix is available, the field displays `NO GPS`.
-- When GPS is available but no forecast is cached for the current or nearest grid point, the field displays `---`.
-- If future UX work prefers symbolic placeholders instead, that should be treated as a deliberate follow-up change rather than assumed current behaviour.
+- When GPS is available but no forecast is cached for the current or nearest grid point, the field displays a slot-aware placeholder: `-/-` (1 slot), `-/-•-/-` (2 slots), or `-/-•-/-•-/-` (3 slots). The count matches the display width and reduces dynamically like live data.
 
 **Forecast interval mapping:**
 
@@ -516,7 +519,7 @@ The forecast intervals (e.g., 3h, 6h) determine which entries the proxy returns.
 3. Set forecast interval 1 to 6 and verify that the third slot is suppressed (only 2 slots shown), since no valid later interval exists.
 4. To test staleness: in the simulator, disconnect the simulated phone connection, wait, and observe the staleness indicator appearing after 30 minutes (or temporarily lower the threshold for testing).
 5. On a physical device, verify that `Application.Properties` changes made during an active activity are visible to the background service on the next temporal event. Record the result explicitly, because this is currently an architectural risk rather than a confirmed behaviour.
-6. Verify that changing units while offline does not crash - cached forecasts are cleared immediately and the display shows `---` until connectivity is restored and a refetch succeeds with the new settings.
+6. Verify that changing units while offline does not crash - cached forecasts are cleared immediately and the display shows the no-forecast placeholder until connectivity is restored and a refetch succeeds with the new settings.
 
 ### Milestone 6: Integration Testing, Optimisation, and Deployment
 
@@ -643,7 +646,7 @@ The background request metadata keys (`bg_rLat`, `bg_rLon`, `bg_reqUnits`, `bg_r
 1. Activity starts. `getInitialView()` registers `Duration(5 * 60)` — first background event scheduled in ~5 minutes.
 2. GPS acquires a fix (e.g., 30 seconds after start). `compute()` detects the transition. `scheduleImmediateFetch()` calls `getLastTemporalEventTime()` → `null` (no event has fired yet). Registers `Time.now()`. The one-shot Moment fires immediately, replacing the pending Duration.
 3. Background service reads GPS from Storage, calls `/v1/forecast`, returns data via `Background.exit()`.
-4. `onBackgroundData()` processes the forecast, stores it, re-registers `Duration(5 * 60)`, and calls `WatchUi.requestUpdate()`. The display updates from `---` to live wind data.
+4. `onBackgroundData()` processes the forecast, stores it, re-registers `Duration(5 * 60)`, and calls `WatchUi.requestUpdate()`. The display updates from the no-forecast placeholder to live wind data.
 5. Subsequent background events fire every ~5 minutes via the restored Duration registration.
 
 Alternative scenario: GPS acquires a fix 6 minutes after start. The first Duration event fires at t=5min (background service gets no GPS from Storage, returns error, `onBackgroundData()` re-registers Duration). At t=6min, GPS acquired. `getLastTemporalEventTime()` returns t=5min. Registers t=5min + 5min = t=10min. The one-shot fires at t=10min. This is the same time the Duration would have fired anyway — the Garmin 5-minute constraint means no improvement is possible here. The fix primarily benefits the common case where GPS locks before the first temporal event.
@@ -663,28 +666,28 @@ The two cleanup hooks are intentionally redundant. If one fires before the other
 In the simulator (GPS fix trigger):
 
 1. Start a Kayak activity without GPS simulation. The display should show `NO GPS`.
-2. Begin GPS simulation (load a GPX file). The display should transition to `---`.
+2. Begin GPS simulation (load a GPX file). The display should transition to the no-forecast placeholder (`-/-•-/-•-/-`).
 3. Trigger a background event via `Simulation > Trigger Background Event`. The display should update to live wind data.
 4. In the simulator console, verify that the temporal event registration was called when GPS was acquired (if debug logging is enabled).
 
 On a physical device (GPS fix trigger):
 
-1. Start a Kayak activity outdoors. Note the time when the display transitions from `NO GPS` to `---`.
-2. Observe the time when wind data first appears. With this fix, data should appear shortly after the `---` state (subject to the 5-minute constraint from the last temporal event). Without this fix, data could take up to 5 minutes from the activity start.
+1. Start a Kayak activity outdoors. Note the time when the display transitions from `NO GPS` to the no-forecast placeholder.
+2. Observe the time when wind data first appears. With this fix, data should appear shortly after the placeholder state (subject to the 5-minute constraint from the last temporal event). Without this fix, data could take up to 5 minutes from the activity start.
 3. Walk indoors until GPS is lost (`NO GPS`). Walk back outdoors. Verify that wind data reappears shortly after GPS is reacquired.
 
 In the simulator (activity-end cache pruning):
 
 1. Start a Kayak activity with GPS simulation. Trigger a background event to fetch forecast data. Verify wind data is displayed.
 2. Stop and save the activity.
-3. Start a new Kayak activity. The display should show `NO GPS` (or `---` once GPS is acquired), not the cached forecast from the previous activity.
+3. Start a new Kayak activity. The display should show `NO GPS` (or the no-forecast placeholder once GPS is acquired), not the cached forecast from the previous activity.
 4. Confirm that `Application.Storage` no longer contains `fc_*` entries or `bg_lat`/`bg_lon` keys from the previous session.
 
 On a physical device (activity-end cache pruning):
 
 1. Complete a kayak paddle with wind data displayed.
 2. Save the activity. Note whether the display clears.
-3. Start a new activity. Verify that stale data from the previous session is not displayed — the field should show `NO GPS` or `---` until a fresh fetch completes.
+3. Start a new activity. Verify that stale data from the previous session is not displayed — the field should show `NO GPS` or the no-forecast placeholder until a fresh fetch completes.
 
 ## Concrete Steps
 
@@ -720,14 +723,14 @@ Milestone 1 steps:
 Each milestone has its own validation section above. The overall acceptance criteria for the complete project:
 
 1. A Kayak activity on a supported device (Instinct 2X Solar or Instinct 2) displays the Wind Force data field with live Met Eireann wind data.
-2. The display shows wind speed, gust speed, and wind direction label, with a `<` separator between adjacent time slots.
+2. The display shows wind speed, gust speed, and wind direction label, with a `•` separator between adjacent time slots.
 3. Multiple time slots are shown when the data field occupies a wider screen slot.
 4. Wind units are configurable (Beaufort, Knots, mph, km/h, m/s) via Garmin Connect Mobile.
 5. Forecast intervals for the 2nd and 3rd time slots are configurable (1-6 hours).
 6. Data refreshes via background temporal events using the latest stored GPS position, and new model runs are picked up automatically on subsequent `/v1/forecast` fetches.
 7. Offline fallback uses the nearest cached forecast grid point. Look-ahead caching is deferred follow-up work and is not currently part of the implemented Milestone 4 architecture.
 8. Stale data (older than 30 minutes) is indicated with a `*` prefix.
-9. When no GPS fix is available, the field shows `NO GPS`. When GPS is available but no forecast is cached for the current or nearest grid point, the field shows `---`.
+9. When no GPS fix is available, the field shows `NO GPS`. When GPS is available but no forecast is cached for the current or nearest grid point, the field shows a slot-aware placeholder (`-/-•-/-•-/-` for 3 slots).
 10. The data field fits within the 32 KB memory limit.
 11. The Cloudflare Worker proxy correctly translates Met Eireann XML to compact JSON and caches results.
 12. When GPS is first acquired (or reacquired after a loss), a background fetch is triggered at the earliest time permitted by Garmin's 5-minute constraint, rather than waiting for the next scheduled polling interval.
@@ -946,9 +949,9 @@ In `proxy/src/met-eireann.ts`:
 - Updated `source/WindForceView.mc` (onLayout determines slot count from dc width; onUpdate calls DisplayRenderer with hardcoded sample data; selectFont auto-picks largest font that fits)
 - Layout selection: 1-slot (<90px), 2-slot (90-149px), 3-slot (>=150px)
 - Direction: 8 cardinal/intercardinal labels (N, NE, E, SE, S, SW, W, NW)
-- Separator: literal `<` between adjacent time slots
+- Separator: `•` (bullet) between adjacent time slots
 - Unit conversion: Beaufort (default), knots, mph, km/h, m/s with mpsToBeaufort lookup for gust
-- Verified in simulator: small slot shows "3/4NE", large slot shows "3/4NE<5/6S<3/5SW"
+- Verified in simulator: small slot shows "3/4NE", large slot shows "3/4NE•5/6S•3/5SW"
 - Memory: 9.4/28.5kB — ~19kB headroom remaining.
 
 **Revision 6 (2026-03-13):** Architectural change — move calculations from watch to proxy.
@@ -971,7 +974,7 @@ Motivation: Since the proxy already performs unit conversion and direction label
 Changes across milestones:
 
 - **Milestone 2 (Proxy):** `/v1/forecast` endpoint gains a `slots` query parameter (comma-separated hour offsets, e.g., `0,3,6`, max 3 values, default `0`). The proxy selects the closest forecast entry for each offset. Response field `wind_deg` removed (not needed on the watch).
-- **Milestone 3 (Display Engine):** `DisplayRenderer` further simplified — `formatLayout()` no longer takes a `slotCount` parameter or performs interval selection; it iterates the `forecasts` array directly (which already contains exactly the right entries) and inserts a literal `<` between slots. `WindData` field `windDeg` removed.
+- **Milestone 3 (Display Engine):** `DisplayRenderer` further simplified — `formatLayout()` takes a `slots` parameter (for building the no-forecast placeholder) but does not perform interval selection; it iterates the `forecasts` array directly (which already contains exactly the right entries) and inserts a `•` between slots. `WindData` field `windDeg` removed.
 - **Milestone 4 (Communication):** `ForecastService.fetchForecast()` signature gains a `slots` string parameter. `FetchManager.executeFetchCycle()` builds the `slots` string from the current slot count (from field width) and interval settings, and tracks `_lastFetchedSlots` to detect interval changes as a fetch trigger.
 - **Milestone 5 (Settings):** Interval change now triggers a refetch (same as unit change). Forecast interval mapping logic moved from `DisplayRenderer` to the proxy.
 - **Interfaces:** `ForecastEntry` field `wind_deg` removed. Monkey C `WindData` field `windDeg` removed. `ForecastService.fetchForecast()` gains `slots` parameter. `DisplayRenderer.formatLayout()` loses `slotCount` parameter.

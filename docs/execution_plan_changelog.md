@@ -2,6 +2,19 @@
 
 ## 2026-03-18
 
+- Documented integer rounding guarantee for all wind/gust speed values as an explicit design decision:
+  - Proxy `convertMps()` already applied `Math.round()` for all units; `mpsToBeaufort()` returns integers by table lookup. Watch-side `WindData` already stored values as Monkey C `Number` (integer). No code logic changes needed — the guarantee was already implemented but not formally documented.
+  - Added JSDoc to `ForecastEntry` in `proxy/src/types.ts` documenting that `wind_speed` and `gust_speed` are always rounded integers.
+  - Added JSDoc to `convertMps()` in `proxy/src/index.ts`.
+  - Added dedicated proxy unit test (`"always returns integers for all units with fractional m/s inputs"`) that verifies `Number.isInteger()` across all 5 units with 9 fractional inputs (41 tests total, up from 40).
+  - Added decision log entry in `docs/execution_plan.md`.
+  - Updated `docs/REQUIREMENTS.md`: display format section and proxy response description now explicitly state the integer guarantee.
+- Display formatting improvements:
+  - Changed slot separator from `<` to `•` (bullet, `&#8226;`) in `resources/strings/strings.xml` for better readability on the monochrome display.
+  - Replaced static "no forecast" string (`---`) with a dynamic slot-aware pattern (`-/-•-/-•-/-`). Each slot displays `-/-` (matching the `W/GD` format), separated by `•`, with the count matching the current display slot count. This gives users a clearer indication that forecast data is expected but not yet available.
+  - `DisplayRenderer.formatLayout()` now accepts a `slots` parameter to build the no-forecast string dynamically. The overflow reduction loop in `WindForceView.onUpdate()` passes the current slot count, so the no-forecast display correctly reduces from 3 to 2 to 1 slot if the text doesn't fit.
+  - Resource string `NoForecast` renamed to `NoForecastSlot` (value changed from `---` to `-/-`).
+  - Updated `README.md`, `RELEASE.md`.
 - **Milestone 7 completed**: Immediate background fetch on first GPS fix and activity-completion cache pruning.
   - **Part 1 — GPS fix trigger** (addresses `docs/field_test.v1.md`): data field showed `---` for up to 5 minutes after GPS lock because GPS acquisition does not trigger a background fetch.
     - Design: `FetchManager` gains a `gpsJustAcquired` flag set on the no-GPS → GPS transition. `WindForceView.compute()` detects the flag and calls `scheduleImmediateFetch()`, which re-registers the temporal event at the earliest legal `Time.Moment` using `Background.getLastTemporalEventTime()` + 5 min (or `Time.now()` if no prior event). `WindForceApp.onBackgroundData()` re-registers `Duration(5 * 60)` after every background event to restore the repeating schedule after the one-shot.

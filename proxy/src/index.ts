@@ -54,6 +54,7 @@ function mpsToBeaufort(mps: number): number {
   return 12;
 }
 
+/** Convert m/s to the requested unit, always returning a rounded integer. */
 function convertMps(mps: number, unit: WindUnit): number {
   switch (unit) {
     case "beaufort":

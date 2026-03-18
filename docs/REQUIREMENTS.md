@@ -25,20 +25,24 @@ Per-point response fields used by this data field: `windSpeed` (mps, beaufort), 
 
 ```text
 W/GD
-W1/G1D1<W2/G2D2
-W1/G1D1<W2/G2D2<W3/G3D3
+W1/G1D1•W2/G2D2
+W1/G1D1•W2/G2D2•W3/G3D3
 
 Examples:
 
 3/4NE
-3/4NE<5/6S
-3/4NE<5/6S<3/5SW
+3/4NE•5/6S
+3/4NE•5/6S•3/5SW
 ```
 
-W - wind speed (Beaufort Scale|Knots|mp/h|km/h|m/s)
-G - wind gust speed (Beaufort Scale|Knots|mp/h|km/h|m/s)
+W - wind speed as a rounded integer (Beaufort Scale|Knots|mp/h|km/h|m/s)
+G - wind gust speed as a rounded integer (Beaufort Scale|Knots|mp/h|km/h|m/s)
 D - wind direction as cardinal/intercardinal label (N, NE, E, SE, S, SW, W, NW)
-`<` - literal separator between adjacent time slots
+`•` - bullet separator between adjacent time slots
+
+All speed values are **always rounded to integers** — no decimal points are ever displayed.
+This is a design constraint: smaller watch displays cannot accommodate fractional digits,
+and integer precision is sufficient for paddling water activities.
 
 The layout shown depends on the data field position selected by the user on the activity screen.
 All layouts occupy a single line.
@@ -105,7 +109,8 @@ Hosted on Cloudflare Workers free tier (100,000 requests/day, KV storage include
   the HARMONIE model grid resolution
 - `units`: `beaufort` (default), `knots`, `mph`, `kmh`, `mps`
 - `slots`: comma-separated hour offsets (e.g., `0,3,6`; max 3; default `0`)
-- Returns JSON with pre-converted wind data for the requested time slots:
+- Returns JSON with pre-converted wind data for the requested time slots.
+  All speed values (`wind_speed`, `gust_speed`) are rounded integers — never floats:
 
 ```json
 {
@@ -201,20 +206,22 @@ When the activity starts and the data field initialises:
    event fires immediately if more than 5 minutes have elapsed since the last run.
 2. `compute()` begins saving the current GPS position to `Application.Storage` on each call.
 3. The first background event reads the saved position and fetches from the proxy.
-4. Until the first successful fetch, the display shows `NO GPS` (no fix yet) or `---`
-   (GPS available but no cached forecast).
+4. Until the first successful fetch, the display shows `NO GPS` (no fix yet) or `-/-•-/-•-/-`
+   (GPS available but no cached forecast — slot count matches the display width).
 
 ### Unavailable Data Display
 
 When no GPS fix is available, the field displays `NO GPS`. When GPS is available but no
-forecast is cached for the current or nearest grid point, the field displays `---`.
+forecast is cached for the current or nearest grid point, the field displays a placeholder
+matching the slot layout: `-/-` for one slot, `-/-•-/-` for two, or `-/-•-/-•-/-` for three.
+The `•` bullet separator matches the one used between live forecast slots.
 
 ## Staleness and Connectivity Loss
 
 ### Staleness Indicator
 
 When the displayed data is older than 30 minutes, the display is prefixed with `*`
-(e.g., `*3/4NE<5/6S`).
+(e.g., `*3/4NE•5/6S`).
 
 ### Connectivity Loss Behaviour
 
