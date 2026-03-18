@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **Immediate background fetch on GPS fix**: When the data field first acquires GPS (or reacquires it after a loss), a background fetch is scheduled at the earliest time permitted by Garmin's 5-minute constraint instead of waiting for the next polling interval. Reduces the initial `---` display duration from up to 5 minutes to near-instant in the common case.
+- **Activity-completion cache pruning**: Cached forecasts and session GPS keys are cleared when an activity ends (saved or discarded). The next activity starts clean instead of showing stale data from a previous session. Dual cleanup hooks (`onActivityCompleted` in background + `onTimerReset` in foreground) ensure robustness.
+
 ### Fixed
 
 - Corrected 0.025-degree coordinate midpoint rounding in both Monkey C and proxy code paths. Exact midpoint values like `53.3375` now round consistently to `53.350` instead of occasionally rounding down because of floating-point division drift.

@@ -83,6 +83,13 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
         }
     }
 
+    //! Called when an activity is completed (saved or discarded).
+    //! Signals the foreground to clear cached forecasts.
+    (:typecheck(false))
+    function onActivityCompleted(activity) as Void {
+        Background.exit({"kind" => "session_end"});
+    }
+
     //! Read wind units setting.
     private function getUnitsString() as String {
         var val = Application.Properties.getValue("windUnits");

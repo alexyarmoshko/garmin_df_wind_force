@@ -20,6 +20,8 @@ Depending on the data field slot size, it displays 1 to 3 time slots so you can 
 
 Slot count adapts dynamically — if the text overflows the field width even at the smallest font, slots are reduced until it fits.
 
+When GPS is first acquired (or reacquired after a loss), the data field triggers an immediate background fetch instead of waiting for the next 5-minute polling interval. When an activity ends, the forecast cache is cleared so the next session starts fresh.
+
 ## Architecture
 
 ```text

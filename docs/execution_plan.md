@@ -19,7 +19,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - [x] (2026-03-15) Milestone 5: User settings and staleness handling
 - [x] (2026-03-17) Milestone 6: Integration testing, optimisation, and deployment
 - [x] (2026-03-12) Plan review v1: addressed all 5 findings (Wrangler syntax, model-status polling, radians, properties.xml, PLANS.md compliance)
-- [ ] Milestone 7: Immediate background fetch on first GPS fix and activity-completion cache pruning (addresses `docs/field_test.v1.md` and `docs/field_test.v2.md`)
+- [x] (2026-03-18) Milestone 7: Immediate background fetch on first GPS fix and activity-completion cache pruning (addresses `docs/field_test.v1.md` and `docs/field_test.v2.md`)
 
 ## Surprises & Discoveries
 
@@ -85,7 +85,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 
 ## Outcomes & Retrospective
 
-**Project completed 2026-03-17.** All 6 milestones delivered. The Wind Force data field is ready for side-loading onto physical devices and real-world testing.
+**Milestone 7 completed 2026-03-18.** All 7 milestones delivered. Milestone 7 addressed two field-test findings: immediate background fetch on first GPS fix and activity-completion cache pruning.
 
 **What went well:**
 
@@ -999,3 +999,13 @@ Changes across milestones:
 - Added Decision Log entry explaining why `onActivityCompleted` + `onTimerReset` were chosen over `AppBase.onStop()`.
 - Updated Milestone 7 title, introduction, files-to-modify, sequence-of-events, and validation sections.
 - Updated Progress, Interfaces (WindForceView, WindForceServiceDelegate), Validation and Acceptance (criterion 13), and Outcomes & Retrospective.
+
+**Revision 11 (2026-03-18):** Implemented Milestone 7.
+
+- Implemented all four file changes as designed in Revisions 9–10.
+- `FetchManager.mc`: added `gpsJustAcquired` flag, set on `!hasPosition` → GPS transition in `updatePosition()`.
+- `WindForceView.mc`: `compute()` checks and resets `gpsJustAcquired`, calls `scheduleImmediateFetch()`. Added `scheduleImmediateFetch()` (one-shot Moment via `getLastTemporalEventTime()`). Added `onTimerReset()` for activity-end cleanup.
+- `WindForceApp.mc`: `getInitialView()` registers for activity-completed events. `onBackgroundData()` handles `session_end` kind (clears cache, deletes session keys, returns without re-registering temporal event). Re-registers `Duration(5*60)` after all other background events. Added `Storage` import.
+- `WindForceServiceDelegate.mc`: added `onActivityCompleted()` callback that exits with `{"kind" => "session_end"}`. Used untyped `activity` parameter to avoid `Activity.Sport`/`Activity.SubSport` resolution failure in `(:background)` scope.
+- Strict build (`-l 3`) passes. Release IQ package built for all 3 device variants.
+- Marked Milestone 7 as complete in Progress section.

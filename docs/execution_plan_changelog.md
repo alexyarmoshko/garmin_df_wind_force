@@ -2,7 +2,7 @@
 
 ## 2026-03-18
 
-- **Milestone 7 planned**: Immediate background fetch on first GPS fix and activity-completion cache pruning.
+- **Milestone 7 completed**: Immediate background fetch on first GPS fix and activity-completion cache pruning.
   - **Part 1 — GPS fix trigger** (addresses `docs/field_test.v1.md`): data field showed `---` for up to 5 minutes after GPS lock because GPS acquisition does not trigger a background fetch.
     - Design: `FetchManager` gains a `gpsJustAcquired` flag set on the no-GPS → GPS transition. `WindForceView.compute()` detects the flag and calls `scheduleImmediateFetch()`, which re-registers the temporal event at the earliest legal `Time.Moment` using `Background.getLastTemporalEventTime()` + 5 min (or `Time.now()` if no prior event). `WindForceApp.onBackgroundData()` re-registers `Duration(5 * 60)` after every background event to restore the repeating schedule after the one-shot.
   - **Part 2 — Activity-end cache pruning** (addresses `docs/field_test.v2.md`): cached forecasts from a previous activity survive into the next session, displaying stale data.
@@ -10,6 +10,16 @@
     - `AppBase.onStop()` was explicitly rejected as a cleanup trigger because it fires on any app exit, not just activity completion.
   - Files to modify: `source/FetchManager.mc`, `source/WindForceView.mc`, `source/WindForceApp.mc`, `source/WindForceServiceDelegate.mc`.
   - Updated `docs/execution_plan.md`: Progress, Decision Log (2 entries), Milestone 7 section, Interfaces (WindForceView, WindForceServiceDelegate, FetchManager), Validation criteria 12–13, Outcomes & Retrospective, Revision History (Revisions 9–10).
+  - Implementation:
+    - `source/FetchManager.mc`: added `gpsJustAcquired` flag, set on no-GPS → GPS transition in `updatePosition()`.
+    - `source/WindForceView.mc`: `compute()` detects `gpsJustAcquired` and calls `scheduleImmediateFetch()` (one-shot Moment via `Background.getLastTemporalEventTime()`). Added `onTimerReset()` as foreground safety net for activity-end cache cleanup.
+    - `source/WindForceApp.mc`: `getInitialView()` registers for activity-completed events. `onBackgroundData()` handles `session_end` kind (clears cache + session keys without re-registering temporal event). Re-registers `Duration(5*60)` after all other background events to restore repeating schedule.
+    - `source/WindForceServiceDelegate.mc`: added `onActivityCompleted()` callback, exits with `{"kind" => "session_end"}`.
+    - Strict build (`-l 3`) passes. Release IQ built for all 3 device variants.
+- Addressed code review v14 findings:
+  1. Fixed session-end cleanup not stopping the temporal background schedule: both `onBackgroundData(session_end)` and `onTimerReset()` now call `Background.deleteTemporalEvent()`. Without this, a pending/repeating temporal event could fire after session end, fail (no GPS keys), and the generic handler would re-arm the 5-minute schedule indefinitely.
+  2. Fixed background session-end path not resetting FetchManager state: extracted `WindForceView.resetSession()` (clears cache, GPS keys, `hasPosition`, `gpsJustAcquired`). `WindForceApp` now stores the view reference (`_view as Object?`) set in `getInitialView()`. The `session_end` handler calls `(_view as WindForceView).resetSession()` so the next activity's first GPS fix correctly triggers an immediate fetch. Previously, only the `onTimerReset()` foreground path reset these flags; if only the background path fired, `hasPosition` stayed `true` and the GPS acquisition trigger was skipped.
+  3. Fixed session-end Storage cleanup gated behind live view reference: `onBackgroundData(session_end)` now calls `StorageManager.clearAllForecasts()` and deletes `bg_lat`/`bg_lon` unconditionally before the `_view` null check. When the app was inactive and background data is delivered on next launch (`_view` is null), the durable cleanup still runs. The `resetSession()` call on the view is additive — it resets in-memory FetchManager flags when the view is alive, but is not required for the Storage-level cleanup.
 
 ## 2026-03-17
 
