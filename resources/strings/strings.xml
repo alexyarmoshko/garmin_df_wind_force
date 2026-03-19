@@ -13,6 +13,10 @@
     <string id="NoForecastSlot">-/-</string>
     <string id="StalePrefix">*</string>
     <string id="SlotSeparator">&#8226;</string>
+    <!-- Wind direction display -->
+    <string id="WindDirTitle">Wind Direction</string>
+    <string id="WindDirLabels">Labels (N, NE...)</string>
+    <string id="WindDirArrows">Arrows</string>
     <!-- Time interval labels -->
     <string id="Hour1">1h</string>
     <string id="Hour2">2h</string>

@@ -37,12 +37,25 @@ Examples:
 
 W - wind speed as a rounded integer (Beaufort Scale|Knots|mp/h|km/h|m/s)
 G - wind gust speed as a rounded integer (Beaufort Scale|Knots|mp/h|km/h|m/s)
-D - wind direction as cardinal/intercardinal label (N, NE, E, SE, S, SW, W, NW)
+D - wind direction, displayed in one of two configurable formats:
+    - **Labels** (default): cardinal/intercardinal text (N, NE, E, SE, S, SW, W, NW)
+    - **Arrows**: arrow glyphs showing where the wind blows TO
+      (N→↓, NE→↙, E→←, SE→↖, S→↑, SW→↗, W→→, NW→↘)
 `•` - bullet separator between adjacent time slots
 
 All speed values are **always rounded to integers** — no decimal points are ever displayed.
 This is a design constraint: smaller watch displays cannot accommodate fractional digits,
 and integer precision is sufficient for paddling water activities.
+
+Arrows mode uses custom bitmap fonts (BMFont format) at 3 sizes (`windforce_s`, `windforce_m`,
+`windforce_l`). The proxy always returns cardinal labels; the arrow mapping is performed on the
+watch in `DisplayRenderer`.
+
+Implementation note: because Connect IQ BMFont loading proved unreliable for the equivalent higher
+Unicode code points, the final custom-font path stores the bullet separator and arrow glyphs on
+ASCII placeholder ids (`|abcdefgh`) inside the BMFont atlas. `DisplayRenderer` emits those
+placeholders only when the custom font family is active. This is internal only and is not exposed
+in the settings UI.
 
 The layout shown depends on the data field position selected by the user on the activity screen.
 All layouts occupy a single line.
@@ -54,6 +67,7 @@ The following settings are configurable by the user via Garmin Connect Mobile or
 | Setting | Options | Default |
 |---|---|---|
 | Wind units | Beaufort, Knots, mph, km/h, m/s | Beaufort |
+| Wind direction | Labels (N, NE...), Arrows (↓, ↙...) | Labels |
 | Forecast interval 1 (S2) | 1h, 2h, 3h, 4h, 5h, 6h | 3h |
 | Forecast interval 2 (S3) | 1h, 2h, 3h, 4h, 5h, 6h | 6h |
 

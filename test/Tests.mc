@@ -224,6 +224,60 @@ function testRenderWindSlotLargeValues(logger as Test.Logger) as Boolean {
     return result.equals("12/25NNE");
 }
 
+// ── DisplayRenderer.dirToArrow ────────────────────────────────────────
+
+(:test)
+function testDirToArrowCardinals(logger as Test.Logger) as Boolean {
+    // All 4 cardinal directions: N→↓, E→←, S→↑, W→→
+    var ok = true;
+    ok = ok && DisplayRenderer.dirToArrow("N").equals(0x2193.toChar().toString());
+    ok = ok && DisplayRenderer.dirToArrow("E").equals(0x2190.toChar().toString());
+    ok = ok && DisplayRenderer.dirToArrow("S").equals(0x2191.toChar().toString());
+    ok = ok && DisplayRenderer.dirToArrow("W").equals(0x2192.toChar().toString());
+    logger.debug("cardinals ok=" + ok);
+    return ok;
+}
+
+(:test)
+function testDirToArrowIntercardinals(logger as Test.Logger) as Boolean {
+    // All 4 intercardinal directions: NE→↙, SE→↖, SW→↗, NW→↘
+    var ok = true;
+    ok = ok && DisplayRenderer.dirToArrow("NE").equals(0x2199.toChar().toString());
+    ok = ok && DisplayRenderer.dirToArrow("SE").equals(0x2196.toChar().toString());
+    ok = ok && DisplayRenderer.dirToArrow("SW").equals(0x2197.toChar().toString());
+    ok = ok && DisplayRenderer.dirToArrow("NW").equals(0x2198.toChar().toString());
+    logger.debug("intercardinals ok=" + ok);
+    return ok;
+}
+
+(:test)
+function testDirToArrowPassthrough(logger as Test.Logger) as Boolean {
+    // Unknown labels pass through unchanged
+    var result = DisplayRenderer.dirToArrow("?");
+    logger.debug("dirToArrow(?) = '" + result + "'");
+    return result.equals("?");
+}
+
+(:test)
+function testRenderWindSlotArrowMode(logger as Test.Logger) as Boolean {
+    DisplayRenderer.useArrows = true;
+    var data = new WindData("2025-01-01T12:00:00Z", 4, 7, "SW");
+    var result = DisplayRenderer.renderWindSlot(data);
+    DisplayRenderer.useArrows = false;
+    logger.debug("renderWindSlot arrow SW = '" + result + "'");
+    // SW wind → ↗ (U+2197)
+    return result.equals("4/7" + 0x2197.toChar().toString());
+}
+
+(:test)
+function testRenderWindSlotLabelMode(logger as Test.Logger) as Boolean {
+    DisplayRenderer.useArrows = false;
+    var data = new WindData("2025-01-01T12:00:00Z", 4, 7, "SW");
+    var result = DisplayRenderer.renderWindSlot(data);
+    logger.debug("renderWindSlot label SW = '" + result + "'");
+    return result.equals("4/7SW");
+}
+
 // ── WindData ──────────────────────────────────────────────────────────
 
 (:test)

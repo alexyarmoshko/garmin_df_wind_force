@@ -1,0 +1,26 @@
+info face="WindForce" size=-27 bold=0 italic=0 charset="" unicode=1 stretchH=100 smooth=1 aa=1 padding=0,0,0,0 spacing=1,1 outline=0
+common lineHeight=33 base=26 scaleW=427 scaleH=24 pages=1 packed=0 alphaChnl=1 redChnl=0 greenChnl=0 blueChnl=0
+page id=0 file="windforce_l.png"
+chars count=22
+char id=48    x=1     y=1     width=17    height=20    xoffset=0     yoffset=6     xadvance=18    page=0  chnl=15
+char id=49    x=19    y=1     width=17    height=20    xoffset=0     yoffset=6     xadvance=18    page=0  chnl=15
+char id=50    x=37    y=1     width=17    height=20    xoffset=0     yoffset=6     xadvance=18    page=0  chnl=15
+char id=51    x=55    y=1     width=17    height=20    xoffset=0     yoffset=6     xadvance=18    page=0  chnl=15
+char id=52    x=73    y=1     width=17    height=20    xoffset=0     yoffset=6     xadvance=18    page=0  chnl=15
+char id=53    x=91    y=1     width=17    height=20    xoffset=0     yoffset=6     xadvance=18    page=0  chnl=15
+char id=54    x=109   y=1     width=17    height=20    xoffset=0     yoffset=6     xadvance=18    page=0  chnl=15
+char id=55    x=127   y=1     width=17    height=20    xoffset=0     yoffset=6     xadvance=18    page=0  chnl=15
+char id=56    x=145   y=1     width=17    height=20    xoffset=0     yoffset=6     xadvance=18    page=0  chnl=15
+char id=57    x=163   y=1     width=17    height=20    xoffset=0     yoffset=6     xadvance=18    page=0  chnl=15
+char id=47    x=181   y=1     width=10    height=22    xoffset=0     yoffset=6     xadvance=11    page=0  chnl=15
+char id=45    x=192   y=1     width=10    height=8     xoffset=0     yoffset=18    xadvance=11    page=0  chnl=15
+char id=42    x=203   y=1     width=14    height=20    xoffset=0     yoffset=6     xadvance=15    page=0  chnl=15
+char id=124   x=218   y=1     width=16    height=14    xoffset=0     yoffset=12    xadvance=17    page=0  chnl=15
+char id=97    x=235   y=1     width=23    height=14    xoffset=0     yoffset=12    xadvance=24    page=0  chnl=15
+char id=98    x=259   y=1     width=23    height=20    xoffset=0     yoffset=6     xadvance=24    page=0  chnl=15
+char id=99    x=283   y=1     width=23    height=14    xoffset=0     yoffset=12    xadvance=24    page=0  chnl=15
+char id=100   x=307   y=1     width=23    height=20    xoffset=0     yoffset=6     xadvance=24    page=0  chnl=15
+char id=101   x=331   y=1     width=23    height=16    xoffset=0     yoffset=10    xadvance=24    page=0  chnl=15
+char id=102   x=355   y=1     width=23    height=16    xoffset=0     yoffset=10    xadvance=24    page=0  chnl=15
+char id=103   x=379   y=1     width=23    height=16    xoffset=0     yoffset=10    xadvance=24    page=0  chnl=15
+char id=104   x=403   y=1     width=23    height=16    xoffset=0     yoffset=10    xadvance=24    page=0  chnl=15

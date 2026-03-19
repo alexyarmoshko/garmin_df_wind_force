@@ -30,7 +30,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - (2026-03-12) Met Eireann XML contains two types of `<time>` elements: point forecasts (from === to) with wind data, and period forecasts (from !== to) with precipitation/symbols. Parser filters on from === to.
 - (2026-03-12) Met Eireann response includes multiple models (harmonie, ec_n1280_1hr, ec_n1280_3hr, ec_n1280_6hr). We extract the `termin` attribute only from the `harmonie` model entry.
 - (2026-03-13) The Instinct 2X large data field slot is wide enough for the 3-slot layout with auto font sizing. Memory usage at 9.4/28.5kB after adding the display engine — still ~19kB headroom for the remaining milestones.
-- (2026-03-13) Cardinal letters (N, NE, E, etc.) render correctly on the Instinct 2X fonts. Unicode arrow testing deferred — letters are compact and readable.
+- (2026-03-13) Cardinal letters (N, NE, E, etc.) render correctly on the Instinct 2X fonts. Later custom arrow-font work confirmed that Connect IQ BMFont loading is reliable for this app when the arrow/separator glyphs are stored on ASCII placeholder ids instead of higher Unicode code points.
 - (2026-03-13) Monkey C modules cannot use `method(:name)` for callbacks (no `self`). FetchManager must be a class, not a module, because `Communications.makeWebRequest()` requires a method reference callback. DisplayRenderer and StorageManager remain modules (no callbacks needed).
 - (2026-03-13) Monkey C `const` float literals (e.g., `2.5`) are `Float`, not `Double`. When passing to functions expecting `Double`, must call `.toDouble()` explicitly.
 - (2026-03-13) PRG file size after Milestone 4: 11.6 KB (release build). Still ~20 KB headroom within the 32 KB limit.
@@ -85,6 +85,10 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 
 - Decision: All wind and gust speed values are rounded to integers end-to-end — proxy returns integers, watch stores and displays integers.
   Rationale: Smaller watch displays (e.g., narrow data field slots on future devices) cannot accommodate decimal digits, and integer precision is sufficient for paddling water activities. The proxy's `convertMps()` applies `Math.round()` for all unit conversions (knots, mph, km/h, m/s) and `mpsToBeaufort()` returns an integer by table lookup. The watch-side `WindData` type stores values as Monkey C `Number` (integer). This guarantee is enforced by a dedicated proxy unit test that verifies `Number.isInteger()` across all units with fractional m/s inputs.
+  Date/Author: 2026-03-18
+
+- Decision: Wind direction display mode (Labels vs Arrows) is implemented watch-side only, with no proxy API changes.
+  Rationale: The proxy returns cardinal labels ("N", "NE", etc.) for all requests. The watch maps those to arrow glyphs in `DisplayRenderer.dirToArrow()`. In the final BMFont implementation, the custom-font path emits ASCII placeholder glyph ids for the slot separator and arrows, while labels mode continues to use normal text. Moving any of this to the proxy would add a query parameter, complicate the API, and require cache invalidation on direction-format changes — all disproportionate to the problem. The watch has sufficient memory for the mapping code and the 3 custom BMFont sizes. The direction setting does not affect cached data, so changing it requires only a display refresh, not a refetch.
   Date/Author: 2026-03-18
 
 ## Outcomes & Retrospective
@@ -361,7 +365,9 @@ These thresholds should be constants that can be tuned after on-device testing.
 
 `source/DisplayRenderer.mc` -- a module containing the rendering logic. Because unit conversion, Beaufort lookup, direction labelling, and slot selection are all performed by the proxy, this module is a thin formatter that concatenates pre-computed values:
 
-- `function renderWindSlot(data)` returns a string like "3/4NE" for one time slot. It reads the pre-converted `windSpeed`, `gustSpeed`, and `windDir` directly from the `WindData` object — no conversion needed.
+- `function renderWindSlot(data)` returns a string like "3/4NE" (labels) or an arrow-glyph equivalent of "3/4↓" (arrows) for one time slot. It reads the pre-converted `windSpeed`, `gustSpeed`, and `windDir` directly from the `WindData` object. When `useArrows` is true, `windDir` is mapped in `dirToArrow()`. In the custom-font path, the returned value is an internal ASCII placeholder glyph id rather than the higher Unicode arrow code point.
+- `function dirToArrow(dir)` maps a cardinal "wind from" label (N, NE, ...) to a Unicode "goes to" arrow character (↓, ↙, ...). Returns the original label if no mapping exists.
+- `var useArrows` — module flag set by `WindForceView.onUpdate()` from the `windDirection` setting.
 - `function formatLayout(forecasts, fetchTimestamp, hasPosition, slots)` concatenates the forecast entries into the final display string. A `•` (bullet) separator is inserted between consecutive slots. When no forecast data is available, it builds a slot-aware placeholder (`-/-•-/-•-/-` for 3 slots) using the `slots` parameter. No `units` parameter is needed since values are already converted. No interval selection logic is needed since the proxy performs it.
 - `function slotCount(width)` determines 1/2/3-slot layout from the field width. The current implementation uses this only for display truncation; the background service still requests 3 slots because cross-process slot-count sync is unresolved.
 - **Removed from watch**: `convertSpeed()`, `mpsToBeaufort()`, `directionLabel()`, `veerBackSymbol()` — all handled by the proxy or no longer applicable.

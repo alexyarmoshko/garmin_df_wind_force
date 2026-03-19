@@ -1,4 +1,5 @@
 import Toybox.Activity;
+import Toybox.Application;
 import Toybox.Application.Storage;
 import Toybox.Background;
 import Toybox.Graphics;
@@ -12,10 +13,19 @@ class WindForceView extends WatchUi.DataField {
     private var _slots as Number = 1;
     private var _fetchMgr as FetchManager;
 
+    // Custom BMFont resources for arrows display mode (lg > md > sm)
+    private var _WindForceFontLg as Graphics.FontType?;
+    private var _WindForceFontMd as Graphics.FontType?;
+    private var _WindForceFontSm as Graphics.FontType?;
+
+    (:typecheck(false))
     function initialize() {
         DataField.initialize();
         _fetchMgr = new FetchManager();
         DisplayRenderer.init();
+        _WindForceFontLg = WatchUi.loadResource($.Rez.Fonts.WindForceFontL);
+        _WindForceFontMd = WatchUi.loadResource($.Rez.Fonts.WindForceFontM);
+        _WindForceFontSm = WatchUi.loadResource($.Rez.Fonts.WindForceFontS);
     }
 
     function onLayout(dc as Dc) as Void {
@@ -66,6 +76,10 @@ class WindForceView extends WatchUi.DataField {
     }
 
     function onUpdate(dc as Dc) as Void {
+        // Read display-only direction setting (0=Labels, 1=Arrows)
+        var dirSetting = Application.Properties.getValue("windDirection");
+        DisplayRenderer.useArrows = (dirSetting instanceof Number && dirSetting == 1);
+
         var bgColor = getBackgroundColor();
         var fgColor = (bgColor == Graphics.COLOR_WHITE) ?
             Graphics.COLOR_BLACK : Graphics.COLOR_WHITE;
@@ -87,11 +101,13 @@ class WindForceView extends WatchUi.DataField {
         var maxWidth = dc.getWidth() - 4;
         var slots = _slots;
         var text = "";
-        var font = Graphics.FONT_XTINY;
+        var font = selectBuiltInFontSize(dc, "");
+        var useCustomFontFamily = shouldUseCustomFontFamily();
+        DisplayRenderer.useCustomGlyphPlaceholders = useCustomFontFamily;
         while (slots > 0) {
             var forecasts = parseForecastEntries(dict, slots);
             text = DisplayRenderer.formatLayout(forecasts, ts, _fetchMgr.hasPosition, slots);
-            font = selectFont(dc, text);
+            font = selectFontSize(dc, text, useCustomFontFamily);
             if (dc.getTextWidthInPixels(text, font) <= maxWidth) {
                 break;
             }
@@ -169,8 +185,42 @@ class WindForceView extends WatchUi.DataField {
         return StorageManager.loadNearestForecast(latDeg, lonDeg);
     }
 
-    //! Select the largest font whose text width fits the field.
-    private function selectFont(dc as Dc, text as String) as FontDefinition {
+    //! Decide whether to use the custom BMFont family or built-in Garmin fonts.
+    //! The custom font only contains digits, punctuation, bullets, and arrows,
+    //! so "NO GPS" must always use the built-in font family.
+    private function shouldUseCustomFontFamily() as Boolean {
+        return DisplayRenderer.useArrows && _fetchMgr.hasPosition;
+    }
+
+    //! Select the largest font size within the chosen family that fits the field.
+    private function selectFontSize(
+        dc as Dc,
+        text as String,
+        useCustomFontFamily as Boolean
+    ) as Graphics.FontType {
+        if (useCustomFontFamily) {
+            return selectCustomFontSize(dc, text);
+        }
+        return selectBuiltInFontSize(dc, text);
+    }
+
+    //! Select the largest custom BMFont size whose text width fits the field.
+    private function selectCustomFontSize(dc as Dc, text as String) as Graphics.FontType {
+        var maxWidth = dc.getWidth() - 4; // 2px padding each side
+
+        if (_WindForceFontLg != null && dc.getTextWidthInPixels(text, _WindForceFontLg) <= maxWidth) {
+            return _WindForceFontLg as Graphics.FontType;
+        }
+        if (_WindForceFontMd != null && dc.getTextWidthInPixels(text, _WindForceFontMd) <= maxWidth) {
+            return _WindForceFontMd as Graphics.FontType;
+        }
+        return (_WindForceFontSm != null) ? _WindForceFontSm : Graphics.FONT_XTINY;
+    }
+
+    //! Select the largest built-in Garmin font whose text width fits the field.
+    private function selectBuiltInFontSize(dc as Dc, text as String) as Graphics.FontType {
+        var maxWidth = dc.getWidth() - 4; // 2px padding each side
+
         var fonts = [
             Graphics.FONT_LARGE,
             Graphics.FONT_MEDIUM,
@@ -178,7 +228,6 @@ class WindForceView extends WatchUi.DataField {
             Graphics.FONT_TINY,
             Graphics.FONT_XTINY
         ];
-        var maxWidth = dc.getWidth() - 4; // 2px padding each side
         for (var i = 0; i < fonts.size() - 1; i++) {
             if (dc.getTextWidthInPixels(text, fonts[i]) <= maxWidth) {
                 return fonts[i];
