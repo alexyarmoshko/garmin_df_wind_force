@@ -125,7 +125,7 @@ module StorageManager {
     //! Returns null if the key format is invalid.
     function splitFcKey(key as String) as Array<String>? {
         // Key format: "fc_53.350_-6.250"
-        // Skip "fc_" prefix (3 chars), then split on "_"
+        // Skip "fc_" prefix (3 chars), then find "_" separator
         if (key.length() < 4) {
             return null;
         }
@@ -133,22 +133,12 @@ module StorageManager {
         if (rest == null) {
             return null;
         }
-        // Find the separator "_" between lat and lon
-        // Lat can be negative, so we need to find the underscore after the lat value
-        // Strategy: find "_" that is preceded by a digit (not the first char)
-        var sepIdx = -1;
-        for (var i = 1; i < (rest as String).length(); i++) {
-            var ch = (rest as String).substring(i, i + 1);
-            if (ch != null && (ch as String).equals("_")) {
-                sepIdx = i;
-                break;
-            }
-        }
-        if (sepIdx < 0) {
+        var sepIdx = (rest as String).find("_");
+        if (sepIdx == null) {
             return null;
         }
-        var lat = (rest as String).substring(0, sepIdx);
-        var lon = (rest as String).substring(sepIdx + 1, (rest as String).length());
+        var lat = (rest as String).substring(0, sepIdx as Number);
+        var lon = (rest as String).substring((sepIdx as Number) + 1, (rest as String).length());
         if (lat == null || lon == null) {
             return null;
         }

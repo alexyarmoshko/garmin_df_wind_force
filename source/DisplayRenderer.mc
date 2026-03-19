@@ -75,8 +75,9 @@ module DisplayRenderer {
             }
         }
 
+        var n = (forecasts.size() < slots) ? forecasts.size() : slots;
         result += renderWindSlot(forecasts[0]);
-        for (var i = 1; i < forecasts.size(); i++) {
+        for (var i = 1; i < n; i++) {
             result += slotSeparator();
             result += renderWindSlot(forecasts[i]);
         }
@@ -95,30 +96,21 @@ module DisplayRenderer {
         return useCustomGlyphPlaceholders ? "|" : sSlotSeparator;
     }
 
-    //! Map a cardinal "wind from" label to a direction glyph.
+    //! Map a cardinal "wind from" label to a BMFont placeholder glyph id.
+    //! The custom BMFont maps arrow glyphs to these ASCII code points.
+    //! Only called when useArrows && hasPosition, so the custom font is
+    //! always active — no Unicode fallback needed.
     //! Returns the original label if no mapping exists.
     function dirToArrow(dir as String) as String {
         // Wind blows FROM the named direction; arrow shows where it goes TO.
-        if (useCustomGlyphPlaceholders) {
-            if (dir.equals("N"))  { return "d"; } // ↓
-            if (dir.equals("NE")) { return "h"; } // ↙
-            if (dir.equals("E"))  { return "a"; } // ←
-            if (dir.equals("SE")) { return "e"; } // ↖
-            if (dir.equals("S"))  { return "b"; } // ↑
-            if (dir.equals("SW")) { return "f"; } // ↗
-            if (dir.equals("W"))  { return "c"; } // →
-            if (dir.equals("NW")) { return "g"; } // ↘
-            return dir;
-        }
-
-        if (dir.equals("N"))  { return 0x2193.toChar().toString(); } // ↓
-        if (dir.equals("NE")) { return 0x2199.toChar().toString(); } // ↙
-        if (dir.equals("E"))  { return 0x2190.toChar().toString(); } // ←
-        if (dir.equals("SE")) { return 0x2196.toChar().toString(); } // ↖
-        if (dir.equals("S"))  { return 0x2191.toChar().toString(); } // ↑
-        if (dir.equals("SW")) { return 0x2197.toChar().toString(); } // ↗
-        if (dir.equals("W"))  { return 0x2192.toChar().toString(); } // →
-        if (dir.equals("NW")) { return 0x2198.toChar().toString(); } // ↘
+        if (dir.equals("N"))  { return "d"; } // ↓
+        if (dir.equals("NE")) { return "h"; } // ↙
+        if (dir.equals("E"))  { return "a"; } // ←
+        if (dir.equals("SE")) { return "e"; } // ↖
+        if (dir.equals("S"))  { return "b"; } // ↑
+        if (dir.equals("SW")) { return "f"; } // ↗
+        if (dir.equals("W"))  { return "c"; } // →
+        if (dir.equals("NW")) { return "g"; } // ↘
         return dir;
     }
 

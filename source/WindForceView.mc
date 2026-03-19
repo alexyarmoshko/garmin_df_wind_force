@@ -18,26 +18,66 @@ class WindForceView extends WatchUi.DataField {
     private var _WindForceFontMd as Graphics.FontType?;
     private var _WindForceFontSm as Graphics.FontType?;
 
+    // Cached state — avoids Storage/Properties reads and object
+    // allocations on every 1-second onUpdate() tick.
+    private var _cacheValid as Boolean = false;
+    private var _cachedDict as Dictionary? = null;
+    private var _cachedForecasts as Array<WindData> = [] as Array<WindData>;
+    private var _useArrows as Boolean = false;
+    // Last position used to build the cache (degrees).
+    // Cache is invalidated when the device moves to a different grid cell.
+    private var _lastCachedLat as Double = 0.0d;
+    private var _lastCachedLon as Double = 0.0d;
+
+    // Cached display output — avoids string concatenation and font
+    // fitting on every tick. Rebuilt only on data change, slot change,
+    // or staleness transition.
+    private var _displayValid as Boolean = false;
+    private var _displayText as String = "";
+    private var _displayFont as Graphics.FontType = Graphics.FONT_XTINY;
+    private var _wasStale as Boolean = false;
+
     (:typecheck(false))
     function initialize() {
         DataField.initialize();
         _fetchMgr = new FetchManager();
         DisplayRenderer.init();
+        _readDirectionSetting();
         _WindForceFontLg = WatchUi.loadResource($.Rez.Fonts.WindForceFontL);
         _WindForceFontMd = WatchUi.loadResource($.Rez.Fonts.WindForceFontM);
         _WindForceFontSm = WatchUi.loadResource($.Rez.Fonts.WindForceFontS);
     }
 
     function onLayout(dc as Dc) as Void {
-        _slots = DisplayRenderer.slotCount(dc.getWidth());
+        var newSlots = DisplayRenderer.slotCount(dc.getWidth());
+        if (newSlots != _slots) {
+            _slots = newSlots;
+            _cacheValid = false;
+        }
     }
 
     function compute(info as Activity.Info) as Void {
+        var hadPosition = _fetchMgr.hasPosition;
         _fetchMgr.updatePosition(info);
 
         if (_fetchMgr.gpsJustAcquired) {
             _fetchMgr.gpsJustAcquired = false;
+            _cacheValid = false;
             scheduleImmediateFetch();
+        } else if (hadPosition && !_fetchMgr.hasPosition) {
+            // GPS fix lost
+            _cacheValid = false;
+        }
+
+        // Invalidate when position moves to a different grid cell
+        // (half grid step = 0.0125 deg ≈ 1.4 km)
+        if (_fetchMgr.hasPosition) {
+            var dLat = _fetchMgr.currentLatDeg - _lastCachedLat;
+            var dLon = _fetchMgr.currentLonDeg - _lastCachedLon;
+            if (dLat > 0.0125 || dLat < -0.0125 ||
+                dLon > 0.0125 || dLon < -0.0125) {
+                _cacheValid = false;
+            }
         }
     }
 
@@ -65,6 +105,7 @@ class WindForceView extends WatchUi.DataField {
         Storage.deleteValue("bg_lon");
         _fetchMgr.hasPosition = false;
         _fetchMgr.gpsJustAcquired = false;
+        _cacheValid = false;
     }
 
     //! Foreground safety net for activity-end cache cleanup.
@@ -76,9 +117,7 @@ class WindForceView extends WatchUi.DataField {
     }
 
     function onUpdate(dc as Dc) as Void {
-        // Read display-only direction setting (0=Labels, 1=Arrows)
-        var dirSetting = Application.Properties.getValue("windDirection");
-        DisplayRenderer.useArrows = (dirSetting instanceof Number && dirSetting == 1);
+        DisplayRenderer.useArrows = _useArrows;
 
         var bgColor = getBackgroundColor();
         var fgColor = (bgColor == Graphics.COLOR_WHITE) ?
@@ -87,41 +126,76 @@ class WindForceView extends WatchUi.DataField {
         dc.setColor(fgColor, bgColor);
         dc.clear();
 
-        // Load forecast data from storage for current position
-        var dict = findBestForecast();
-
-        // Use per-forecast fetch timestamp for staleness (not global)
-        var ts = 0;
-        if (dict != null) {
-            var fetchTs = (dict as Dictionary)["fetch_ts"];
-            if (fetchTs instanceof Number) { ts = fetchTs as Number; }
+        // Rebuild cached forecast data only when invalidated
+        if (!_cacheValid) {
+            _cachedDict = findBestForecast();
+            _cachedForecasts = parseForecastEntries(_cachedDict, _slots);
+            _lastCachedLat = _fetchMgr.currentLatDeg;
+            _lastCachedLon = _fetchMgr.currentLonDeg;
+            _cacheValid = true;
+            _displayValid = false; // data changed → must rebuild text
         }
 
-        // Try rendering with max slots, reduce if text overflows
-        var maxWidth = dc.getWidth() - 4;
-        var slots = _slots;
-        var text = "";
-        var font = selectBuiltInFontSize(dc, "");
-        var useCustomFontFamily = shouldUseCustomFontFamily();
-        DisplayRenderer.useCustomGlyphPlaceholders = useCustomFontFamily;
-        while (slots > 0) {
-            var forecasts = parseForecastEntries(dict, slots);
-            text = DisplayRenderer.formatLayout(forecasts, ts, _fetchMgr.hasPosition, slots);
-            font = selectFontSize(dc, text, useCustomFontFamily);
-            if (dc.getTextWidthInPixels(text, font) <= maxWidth) {
-                break;
+        // Check staleness transition (cheap — no Storage access)
+        var ts = 0;
+        if (_cachedDict != null) {
+            var fetchTs = (_cachedDict as Dictionary)["fetch_ts"];
+            if (fetchTs instanceof Number) { ts = fetchTs as Number; }
+        }
+        var isStale = (ts > 0 && (Time.now().value() - ts) > STALE_THRESHOLD_SEC);
+        if (isStale != _wasStale) {
+            _wasStale = isStale;
+            _displayValid = false;
+        }
+
+        // Rebuild display text and font only when needed
+        if (!_displayValid) {
+            var maxWidth = dc.getWidth() - 4;
+            var slots = _slots;
+            var text = "";
+            var font = selectBuiltInFontSize(dc, "");
+            var useCustomFontFamily = shouldUseCustomFontFamily();
+            DisplayRenderer.useCustomGlyphPlaceholders = useCustomFontFamily;
+            while (slots > 0) {
+                text = DisplayRenderer.formatLayout(_cachedForecasts, ts, _fetchMgr.hasPosition, slots);
+                font = selectFontSize(dc, text, useCustomFontFamily);
+                if (dc.getTextWidthInPixels(text, font) <= maxWidth) {
+                    break;
+                }
+                slots--;
             }
-            slots--;
+            _displayText = text;
+            _displayFont = font;
+            _displayValid = true;
         }
 
         dc.setColor(fgColor, Graphics.COLOR_TRANSPARENT);
         dc.drawText(
             dc.getWidth() / 2,
             dc.getHeight() / 2,
-            font,
-            text,
+            _displayFont,
+            _displayText,
             Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
         );
+    }
+
+    //! Invalidate cached forecast data. Called when new background data
+    //! arrives or storage is cleared externally.
+    function invalidateCache() as Void {
+        _cacheValid = false;
+    }
+
+    //! Called by WindForceApp when settings change. Refreshes the cached
+    //! direction setting and invalidates forecast cache.
+    function onAppSettingsChanged() as Void {
+        _readDirectionSetting();
+        _cacheValid = false;
+    }
+
+    //! Read the windDirection property into a cached boolean.
+    private function _readDirectionSetting() as Void {
+        var val = Application.Properties.getValue("windDirection");
+        _useArrows = (val instanceof Number && val == 1);
     }
 
     //! Parse forecast entries from a stored forecast dictionary.
