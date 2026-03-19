@@ -45,12 +45,12 @@ module DisplayRenderer {
 
     //! Build the full display string for the given forecasts.
     //! @param forecasts Array of WindData (may be empty)
-    //! @param fetchTimestamp Unix epoch seconds of last successful fetch (0 if never)
+    //! @param isStale Whether the forecast data is older than STALE_THRESHOLD_SEC
     //! @param hasPosition Whether GPS position is available
     //! @param slots Number of time slots to display
     function formatLayout(
         forecasts as Array<WindData>,
-        fetchTimestamp as Number,
+        isStale as Boolean,
         hasPosition as Boolean,
         slots as Number
     ) as String {
@@ -67,12 +67,8 @@ module DisplayRenderer {
 
         var result = "";
 
-        // Prefix with stale indicator when data is old
-        if (fetchTimestamp > 0) {
-            var age = Time.now().value() - fetchTimestamp;
-            if (age > STALE_THRESHOLD_SEC) {
-                result = sStalePrefix;
-            }
+        if (isStale) {
+            result = sStalePrefix;
         }
 
         var n = (forecasts.size() < slots) ? forecasts.size() : slots;

@@ -20,12 +20,10 @@ module SettingsHelper {
     }
 
     //! Build slots query parameter from interval settings.
+    //! Assumes _validateIntervals() has already ensured i2 > i1.
     function getSlotsString() as String {
         var i1 = getInterval(1);
         var i2 = getInterval(2);
-        if (i2 <= i1) {
-            i2 = i1 + 1;
-        }
         if (i2 > 6) {
             return "0," + i1.toString();
         }
