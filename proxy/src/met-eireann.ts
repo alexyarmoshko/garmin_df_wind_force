@@ -43,7 +43,10 @@ function parseWeatherXml(xml: string): ParsedForecast {
   const parsed = parser.parse(xml);
 
   // Extract HARMONIE model run timestamp from <meta>
-  const models = parsed.weatherdata.meta.model;
+  const models = parsed?.weatherdata?.meta?.model;
+  if (!models) {
+    throw new Error("Invalid XML structure: missing weatherdata.meta.model");
+  }
   const modelsArr = Array.isArray(models) ? models : [models];
   const harmonie = modelsArr.find(
     (m: Record<string, string>) => m["@_name"] === "harmonie"
@@ -51,7 +54,10 @@ function parseWeatherXml(xml: string): ParsedForecast {
   const modelRun: string = harmonie?.["@_termin"] ?? "";
 
   // Extract wind data from point-in-time forecasts (from === to)
-  const times = parsed.weatherdata.product.time;
+  const times = parsed?.weatherdata?.product?.time;
+  if (!times) {
+    throw new Error("Invalid XML structure: missing weatherdata.product.time");
+  }
   const timesArr = Array.isArray(times) ? times : [times];
 
   // Include the current hour's forecast even if the clock has moved past it.
