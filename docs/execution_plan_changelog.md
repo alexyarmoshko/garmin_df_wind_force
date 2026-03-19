@@ -2,6 +2,11 @@
 
 ## 2026-03-19
 
+- Addressed code review v18 findings (`docs/code_review.v18.md`) — proxy backend:
+  1. **[Medium] Added global error handler**: Wrapped the `handleForecast()` call in the worker `fetch()` entry point with `try/catch`. Unhandled exceptions (upstream timeouts, invalid XML, parsing errors) now return a structured JSON `502` response via `errorResponse()` instead of Cloudflare's default HTML 500 error page. The Garmin watch always receives parseable JSON.
+  2. **[Low] Added XML structure validation**: `parseWeatherXml()` in `met-eireann.ts` now uses optional chaining (`parsed?.weatherdata?.meta?.model` and `parsed?.weatherdata?.product?.time`) with explicit null checks. If Met Eireann returns an unexpected response (e.g. an HTML maintenance page), the function throws a descriptive `Error` instead of a raw `TypeError`. This error is caught by the new global handler (finding #1) and returned as JSON.
+  - Files modified: `proxy/src/index.ts`, `proxy/src/met-eireann.ts`.
+  - All 41 proxy tests pass.
 - Addressed code review v16 findings (`docs/code_review.v16.md`):
   1. **Dead code — empty stubs removed**: Removed `FetchManager.initialize()` (empty body, no parent class) and `WindForceApp.onStart()` (empty `AppBase` override). Monkey C auto-generates default constructors for classes without explicit `initialize()`.
   2. **[High] Throttled Storage writes in FetchManager**: `updatePosition()` no longer writes `bg_lat`/`bg_lon` to `Application.Storage` every second. Writes are throttled to occur only when position changes by > 0.001 degrees (~100 m). On GPS loss, `_lastStoredLat/_lastStoredLon` are reset so the next fix always persists immediately. Reduces ~300 Storage writes per 5-minute background interval to ~2–5.

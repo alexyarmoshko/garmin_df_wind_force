@@ -261,7 +261,11 @@ export default {
 
     switch (url.pathname) {
       case "/v1/forecast":
-        return handleForecast(url, env);
+        try {
+          return await handleForecast(url, env);
+        } catch {
+          return errorResponse("Upstream API failure or parsing error", 502);
+        }
       default:
         return errorResponse("Not found", 404);
     }
