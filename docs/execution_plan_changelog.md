@@ -1,5 +1,22 @@
 # Execution Changelog
 
+## 2026-03-19
+
+- Addressed code review v14 findings (`docs/code_review.v14.md`):
+  1. **[High] Cached Storage & Properties access in onUpdate()**: `WindForceView.onUpdate()` no longer reads `Application.Properties` or `Application.Storage` on every 1-second tick. The `windDirection` property is cached in `_useArrows` and refreshed only on `onAppSettingsChanged()`. The best forecast dictionary (`_cachedDict`) and parsed forecast entries (`_cachedForecasts`) are cached and rebuilt only when invalidated. Cache invalidation triggers: new background data (`invalidateCache()` from `onBackgroundData`), GPS state change (acquired or lost), position moves to a different 0.025° grid cell (detected via threshold comparison in `compute()`), session reset, settings change, and slot count change in `onLayout()`.
+  2. **[Medium] Eliminated per-tick object allocation**: `parseForecastEntries()` is called once when the cache is invalidated, not on every render tick. The `while (slots > 0)` fitting loop reuses the pre-cached `Array<WindData>` without allocating new objects. `DisplayRenderer.formatLayout()` now limits rendered entries to `min(forecasts.size(), slots)` so the full cached array can be passed directly without slicing.
+  3. **[Medium] Consolidated duplicated settings parsing**: Created `source/SettingsHelper.mc` — a `(:background)` module with `getUnitsString()`, `getSlotsString()`, and `getInterval()`. Both `WindForceApp.onBackgroundData()` (formerly `_currentUnitsString()` / `_currentSlotsString()`) and `WindForceServiceDelegate.onTemporalEvent()` (formerly private `getUnitsString()` / `getSlotsString()` / `getInterval()`) now call the shared module. Single source of truth eliminates the risk of divergence when settings logic changes.
+  - Files added: `source/SettingsHelper.mc`.
+  - Files modified: `source/WindForceView.mc`, `source/WindForceApp.mc`, `source/WindForceServiceDelegate.mc`, `source/DisplayRenderer.mc`.
+  - Strict build (`-l 3`) passes.
+- Addressed code review v15 findings (`docs/code_review.v15.md`):
+  1. **[Medium] Replaced substring loop with String.find() in splitFcKey()**: The char-by-char search that allocated a new 1-character string on every iteration via `substring(i, i+1)` is replaced with a single native `String.find("_")` call. Eliminates all intermediate string allocations when resolving nearest cached grid point.
+  2. **[Medium] Cached display text and font**: Added `_displayText`, `_displayFont`, `_displayValid`, and `_wasStale` member variables to `WindForceView`. The string concatenation in `formatLayout()` and the font fitting loop now run only when forecast data changes, slot count changes, or the staleness state transitions (crosses the 30-minute threshold). On steady-state 1-second ticks, `onUpdate()` skips directly to `dc.drawText()` with the cached values.
+  3. **[Minor] Removed dead Unicode arrow path from dirToArrow()**: The second code block generating Unicode arrows via `toChar().toString()` was unreachable — `dirToArrow()` is only called when `useArrows && hasPosition`, which always sets `useCustomGlyphPlaceholders = true`, so only the ASCII placeholder path executes. Removed the Unicode block, the `useCustomGlyphPlaceholders` guard in `dirToArrow()`, and the 8 pre-allocated `sArr*` module variables. Saves ~200 bytes of heap and makes the function's single responsibility clear.
+  4. **[Low] Background memory headroom** (noted, no code change): proxy already limits response to max 3 slots with compact keys. Acknowledged as a deployment-level invariant.
+  - Files modified: `source/StorageManager.mc`, `source/WindForceView.mc`, `source/DisplayRenderer.mc`.
+  - Strict build (`-l 3`) passes.
+
 ## 2026-03-18
 
 - **Wind Direction display setting** (Labels / Arrows):

@@ -174,6 +174,26 @@ Settings are configurable via Garmin Connect Mobile or Garmin Express:
 | Forecast interval 1 | 1h - 6h | 3h |
 | Forecast interval 2 | 1h - 6h | 6h |
 
+## Wind Speed Reference
+
+| Bft | Description     | knots | mph   | km/h    | m/s       |
+|----:|-----------------|------:|------:|--------:|----------:|
+|   0 | Calm            |   < 1 |   < 1 |     < 2 | < 0.3     |
+|   1 | Light air       |   1–3 |   1–3 |    2–5  | 0.3–1.5   |
+|   2 | Light breeze    |   4–6 |   4–7 |   6–11  | 1.6–3.3   |
+|   3 | Gentle breeze   |  7–10 |  8–12 |  12–19  | 3.4–5.4   |
+|   4 | Moderate breeze | 11–16 | 13–18 |  20–28  | 5.5–7.9   |
+|   5 | Fresh breeze    | 17–21 | 19–24 |  29–38  | 8.0–10.7  |
+|   6 | Strong breeze   | 22–27 | 25–31 |  39–49  | 10.8–13.8 |
+|   7 | Near gale       | 28–33 | 32–38 |  50–61  | 13.9–17.1 |
+|   8 | Gale            | 34–40 | 39–46 |  62–74  | 17.2–20.7 |
+|   9 | Strong gale     | 41–47 | 47–54 |  75–88  | 20.8–24.4 |
+|  10 | Storm           | 48–55 | 55–63 |  89–102 | 24.5–28.4 |
+|  11 | Violent storm   | 56–63 | 64–73 | 103–117 | 28.5–32.6 |
+|  12 | Hurricane       |  ≥ 64 |  ≥ 74 |   ≥ 118 | ≥ 32.7    |
+
+All values are displayed as rounded integers on the watch. Beaufort thresholds match the WMO standard scale used by the proxy's `mpsToBeaufort()` conversion.
+
 ## License
 
 GNU General Public License v2 or later. See [LICENSE](LICENSE).

@@ -45,6 +45,10 @@ class WindForceApp extends Application.AppBase {
     function onSettingsChanged() as Void {
         _validateIntervals();
         StorageManager.clearAllForecasts();
+        var view = _getView();
+        if (view != null) {
+            (view as WindForceView).onAppSettingsChanged();
+        }
         WatchUi.requestUpdate();
     }
 
@@ -84,36 +88,6 @@ class WindForceApp extends Application.AppBase {
         return [new WindForceServiceDelegate()];
     }
 
-    //! Compute the current wind-units string from Application.Properties.
-    //! Mirrors WindForceServiceDelegate.getUnitsString() so the foreground
-    //! can validate that a background response used the current settings.
-    private function _currentUnitsString() as String {
-        var val = Application.Properties.getValue("windUnits");
-        if (val instanceof Number) {
-            switch (val as Number) {
-                case 1: return "knots";
-                case 2: return "mph";
-                case 3: return "kmh";
-                case 4: return "mps";
-            }
-        }
-        return "beaufort";
-    }
-
-    //! Compute the current slots string from Application.Properties.
-    //! Mirrors WindForceServiceDelegate.getSlotsString().
-    private function _currentSlotsString() as String {
-        var i1v = Application.Properties.getValue("forecastInterval1");
-        var i2v = Application.Properties.getValue("forecastInterval2");
-        var i1 = (i1v instanceof Number && (i1v as Number) >= 1 && (i1v as Number) <= 6) ? i1v as Number : 3;
-        var i2 = (i2v instanceof Number && (i2v as Number) >= 1 && (i2v as Number) <= 6) ? i2v as Number : 6;
-        if (i2 <= i1) { i2 = i1 + 1; }
-        if (i2 > 6) {
-            return "0," + i1.toString();
-        }
-        return "0," + i1.toString() + "," + i2.toString();
-    }
-
     //! Called when the background service returns data.
     // Foreground-only: references StorageManager and WatchUi (not in background scope)
     (:typecheck(false))
@@ -148,8 +122,8 @@ class WindForceApp extends Application.AppBase {
                 var rUnits = dict["reqUnits"];
                 var rSlots = dict["reqSlots"];
                 if (rUnits instanceof String && rSlots instanceof String) {
-                    var curUnits = _currentUnitsString();
-                    var curSlots = _currentSlotsString();
+                    var curUnits = SettingsHelper.getUnitsString();
+                    var curSlots = SettingsHelper.getSlotsString();
                     if (!curUnits.equals(rUnits) || !curSlots.equals(rSlots)) {
                         // Restore the repeating schedule even on rejection
                         Background.registerForTemporalEvent(new Time.Duration(5 * 60));
@@ -169,6 +143,10 @@ class WindForceApp extends Application.AppBase {
                         var payloadDict = payload as Dictionary;
                         payloadDict.put("fetch_ts", Time.now().value());
                         StorageManager.storeForecast(rLat, rLon, payloadDict);
+                        var view = _getView();
+                        if (view != null) {
+                            (view as WindForceView).invalidateCache();
+                        }
                     }
                 }
             }
