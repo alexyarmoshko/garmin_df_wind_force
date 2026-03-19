@@ -17,9 +17,6 @@ class WindForceApp extends Application.AppBase {
         AppBase.initialize();
     }
 
-    function onStart(state as Dictionary?) as Void {
-    }
-
     function onStop(state as Dictionary?) as Void {
         Background.deleteTemporalEvent();
     }
