@@ -8,7 +8,24 @@
 - Reduced logging call-site work in `source/WindForceApp.mc`, `source/WindForceServiceDelegate.mc`, and `source/FetchManager.mc` so logs are short fixed strings or response-code entries only.
 - Updated `source/DiagnosticsLog.mc` to prepend human-readable timestamps centrally.
 - Verified successful builds for both `bin/WindForce.prg` and `bin/WindForce-test.prg`.
-- 
+- Removed 4 arrow-related unit tests from `test/Tests.mc` (25 Monkey C tests remain).
+- Updated `docs/REQUIREMENTS.md`: removed arrows direction format, BMFont implementation note, and Direction markers setting. Wind direction is now always compact cardinal labels.
+- Updated `docs/execution_plan.md`: superseded arrows decision, added removal and diagnostic logging decisions, updated DisplayRenderer interface, Surprises & Discoveries, Outcomes & Retrospective, and Revision History (Revision 12).
+- Refactored forecast interval settings from absolute offsets to relative increments:
+  - Both Immediate Interval and Imminent Interval now select +1h to +6h. Immediate is offset from now; Imminent is offset from Immediate. Proxy receives absolute values (`0,i1,i1+i2`).
+  - `source/SettingsHelper.mc`: rewrote `getSlotsString()` to compute `slot3 = i1 + i2`. Removed `i2 > 6` suppression. Default for interval 2 changed from 6 to 3.
+  - `source/WindForceApp.mc`: deleted `_validateIntervals()` (20 lines) and its call from `onSettingsChanged()`. No cross-field validation needed — all combinations valid by design.
+  - `resources/properties/properties.xml`: `forecastInterval2` default changed from 6 to 3.
+  - `resources/strings/strings.xml`: hour labels changed from `1h`-`6h` to `+1h`-`+6h`.
+  - `proxy/src/index.ts`: `parseSlots()` range raised from 0-7 to 0-12. Updated test.
+  - All 41 proxy tests pass. Strict build (`-l 3`) passes.
+  - Updated `docs/REQUIREMENTS.md`, `README.md`, `RELEASE.md`, `docs/execution_plan.md` (Decision Log + Revision 13).
+- Addressed code review v20 findings (`docs/code_review.v20.md`):
+  1. **[Low] GPS quality gate — implemented**: `FetchManager.updatePosition()` now rejects positions with `currentLocationAccuracy < Position.QUALITY_POOR` (value 2). This filters out `QUALITY_LAST_KNOWN` (stale cached positions from a previous activity or satellite warmup), preventing background fetches for the wrong grid cell. A 2D fix (`QUALITY_POOR`) is accurate enough for the 2.5 km forecast grid.
+  2. **[Low] Named constants for magic numbers — skipped**: The two thresholds (`0.0125` half-grid width, `0.001` ~100 m write throttle) are each used once with inline comments explaining the value and its physical meaning. Extracting them to named constants would add module-level declarations for single-use values without improving clarity beyond the existing comments. In a 32 KB memory-constrained app, avoiding unnecessary constant allocations is preferred.
+  - Files modified: `source/FetchManager.mc`.
+  - Strict build (`-l 3`) passes.
+
 ## 2026-03-19
 
 - Addressed code review v18 findings (`docs/code_review.v18.md`) — proxy backend:

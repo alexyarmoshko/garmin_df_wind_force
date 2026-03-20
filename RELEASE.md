@@ -8,11 +8,12 @@
 - **Improved display formatting**: Slot separator changed from `<` to `•` (bullet) for better readability. "No forecast" state now shows `-/-•-/-•-/-` (matching the slot count) instead of `---`, giving a clearer visual cue that data is expected but not yet available.
 - **Integer speed values guaranteed**: All wind and gust speed values are rounded to integers end-to-end (proxy → JSON → watch display). No decimal points are ever shown. This is a design guarantee for compatibility with smaller watch displays; integer precision is sufficient for paddling water activities.
 - **Activity-completion cache pruning**: Cached forecasts and session GPS keys are cleared when an activity ends (saved or discarded). The next activity starts clean instead of showing stale data from a previous session. Dual cleanup hooks (`onActivityCompleted` in background + `onTimerReset` in foreground) ensure robustness.
+- **Diagnostic logging**: New `DiagnosticsLog` module provides structured device logging with human-readable timestamps, controlled by a compile-time `ENABLE_DEVICE_LOGS` toggle. Event messages are short fixed strings; background fetch logs record the event and HTTP response code. Logging calls added to app lifecycle, settings changes, background data handling, and fetch events.
 
 ### Changed
 
 - **Display path simplified**: The watch now uses a single-line renderer with only built-in Garmin system fonts. The experimental two-line layout code was removed.
-- **Diagnostics logging trimmed**: Logs still include a human-readable timestamp, but event messages are now short fixed strings. Background fetch logs record only the event and HTTP response code.
+- **Forecast intervals are now increments**: Both Immediate Interval and Imminent Interval settings are now relative offsets (+1h to +6h). Immediate is the offset from now; Imminent is the offset from the Immediate slot. Defaults changed from (3h, 6h) to (+3h, +3h), producing the same `0,3,6` slot query. All combinations are valid by design — the cross-field validation logic (`_validateIntervals()`) has been removed. Maximum third-slot offset is +12h.
 
 ### Removed
 

@@ -30,7 +30,8 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
 - (2026-03-12) Met Eireann XML contains two types of `<time>` elements: point forecasts (from === to) with wind data, and period forecasts (from !== to) with precipitation/symbols. Parser filters on from === to.
 - (2026-03-12) Met Eireann response includes multiple models (harmonie, ec_n1280_1hr, ec_n1280_3hr, ec_n1280_6hr). We extract the `termin` attribute only from the `harmonie` model entry.
 - (2026-03-13) The Instinct 2X large data field slot is wide enough for the 3-slot layout with auto font sizing. Memory usage at 9.4/28.5kB after adding the display engine — still ~19kB headroom for the remaining milestones.
-- (2026-03-13) Cardinal letters (N, NE, E, etc.) render correctly on the Instinct 2X fonts. Later custom arrow-font work confirmed that Connect IQ BMFont loading is reliable for this app when the arrow/separator glyphs are stored on ASCII placeholder ids instead of higher Unicode code points.
+- (2026-03-13) Cardinal letters (N, NE, E, etc.) render correctly on the Instinct 2X built-in fonts.
+- (2026-03-20) Custom BMFont arrow glyphs caused OOM issues and visual problems on the device. The arrows display mode and all custom font resources were removed; wind direction is now always shown as cardinal labels using built-in system fonts.
 - (2026-03-13) Monkey C modules cannot use `method(:name)` for callbacks (no `self`). FetchManager must be a class, not a module, because `Communications.makeWebRequest()` requires a method reference callback. DisplayRenderer and StorageManager remain modules (no callbacks needed).
 - (2026-03-13) Monkey C `const` float literals (e.g., `2.5`) are `Float`, not `Double`. When passing to functions expecting `Double`, must call `.toDouble()` explicitly.
 - (2026-03-13) PRG file size after Milestone 4: 11.6 KB (release build). Still ~20 KB headroom within the 32 KB limit.
@@ -87,13 +88,26 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
   Rationale: Smaller watch displays (e.g., narrow data field slots on future devices) cannot accommodate decimal digits, and integer precision is sufficient for paddling water activities. The proxy's `convertMps()` applies `Math.round()` for all unit conversions (knots, mph, km/h, m/s) and `mpsToBeaufort()` returns an integer by table lookup. The watch-side `WindData` type stores values as Monkey C `Number` (integer). This guarantee is enforced by a dedicated proxy unit test that verifies `Number.isInteger()` across all units with fractional m/s inputs.
   Date/Author: 2026-03-18
 
-- Decision: Wind direction markers display mode (Labels vs Arrows) is implemented watch-side only, with no proxy API changes.
-  Rationale: The proxy returns cardinal labels ("N", "NE", etc.) for all requests. The watch maps those to arrow glyphs in `DisplayRenderer.dirToArrow()`. In the final BMFont implementation, the custom-font path emits ASCII placeholder glyph ids for the slot separator and arrows, while labels mode continues to use normal text. Moving any of this to the proxy would add a query parameter, complicate the API, and require cache invalidation on direction-format changes — all disproportionate to the problem. The watch has sufficient memory for the mapping code and the 3 custom BMFont sizes. The direction setting does not affect cached data, so changing it requires only a display refresh, not a refetch.
-  Date/Author: 2026-03-18
+- Decision: ~~Wind direction markers display mode (Labels vs Arrows) is implemented watch-side only, with no proxy API changes.~~ **Superseded 2026-03-20:** The arrows display mode, custom BMFont resources, and the `windDirection` setting were removed due to OOM issues and visual problems with the custom font on the device. Wind direction is now always shown as compact cardinal labels using built-in Garmin system fonts.
+  Date/Author: 2026-03-18 (superseded 2026-03-20)
+
+- Decision: Remove the arrows display mode, custom BMFont resources, and the `windDirection` setting. Wind direction is always shown as compact cardinal labels using built-in Garmin system fonts.
+  Rationale: Field testing revealed that the custom BMFont resources caused out-of-memory (OOM) issues on the device and produced visual rendering problems. The 3 custom font sizes (`windforce_s/m/l`) plus the font-switching logic consumed memory disproportionate to the feature's value. Removing the feature simplified `DisplayRenderer` (eliminated `dirToArrow()`, `useArrows`, `useCustomGlyphPlaceholders`, and the custom font selection cascade) and `WindForceView` (eliminated custom font resource loading and the dual font-family selection path). The display now uses a single built-in font auto-sizing path.
+  Date/Author: 2026-03-20
+
+- Decision: Change forecast interval settings from absolute hour offsets to relative increments. Both Immediate Interval and Imminent Interval now select +1h to +6h. Immediate is the offset from now (0h); Imminent is the offset from the Immediate slot. The proxy receives absolute values (e.g., `0,3,6`), computed as `slot2 = interval1`, `slot3 = interval1 + interval2`.
+  Rationale: The previous design required cross-field validation (`_validateIntervals()`) to ensure Interval 2 > Interval 1, with edge-case correction logic and a redundant safety net in the background service. The increment-based design makes every combination valid by construction — no validation needed. This simplifies `WindForceApp` (removed `_validateIntervals()` and its 20 lines of correction logic), `SettingsHelper.getSlotsString()` (removed `i2 > 6` slot suppression), and eliminates a documented settings-propagation concern between foreground and background processes. The maximum third-slot offset increases from 6h to 12h (6+6), which is acceptable for the HARMONIE model's 90-hour forecast range. Defaults changed from (3h, 6h) to (+3h, +3h), producing the same `0,3,6` result. Proxy `parseSlots()` range raised from 0-7 to 0-12.
+  Date/Author: 2026-03-20
+
+- Decision: Add diagnostic logging via a `DiagnosticsLog` module rather than inline `System.println()` calls.
+  Rationale: Field testing requires structured log output to diagnose timing and data flow issues on the device. A centralised module with a compile-time `ENABLE_DEVICE_LOGS` toggle ensures logs are short fixed strings with timestamps, and can be disabled for release builds without removing call sites. The `(:background)` annotation allows the module to be used in both foreground and background service processes.
+  Date/Author: 2026-03-20
 
 ## Outcomes & Retrospective
 
 **Milestone 7 completed 2026-03-18.** All 7 milestones delivered. Milestone 7 addressed two field-test findings: immediate background fetch on first GPS fix and activity-completion cache pruning.
+
+**Post-milestone UI simplification (2026-03-20):** The arrows display mode, custom BMFont resources (`windforce_s/m/l`), and the `windDirection` setting were removed due to OOM issues and visual problems with the custom font on the device. The display now uses only built-in Garmin system fonts with a single-line renderer. Diagnostic logging was added via a new `DiagnosticsLog` module to aid field testing. The 4 arrow-related unit tests were removed (25 Monkey C tests remain).
 
 **What went well:**
 
@@ -365,9 +379,7 @@ These thresholds should be constants that can be tuned after on-device testing.
 
 `source/DisplayRenderer.mc` -- a module containing the rendering logic. Because unit conversion, Beaufort lookup, direction labelling, and slot selection are all performed by the proxy, this module is a thin formatter that concatenates pre-computed values:
 
-- `function renderWindSlot(data)` returns a string like "3/4NE" (labels) or an arrow-glyph equivalent of "3/4↓" (arrows) for one time slot. It reads the pre-converted `windSpeed`, `gustSpeed`, and `windDir` directly from the `WindData` object. When `useArrows` is true, `windDir` is mapped in `dirToArrow()`. In the custom-font path, the returned value is an internal ASCII placeholder glyph id rather than the higher Unicode arrow code point.
-- `function dirToArrow(dir)` maps a cardinal "wind from" label (N, NE, ...) to a Unicode "goes to" arrow character (↓, ↙, ...). Returns the original label if no mapping exists.
-- `var useArrows` — module flag set by `WindForceView.onUpdate()` from the `windDirection` setting.
+- `function renderWindSlot(data)` returns a string like "3/4NE" for one time slot. It reads the pre-converted `windSpeed`, `gustSpeed`, and `windDir` directly from the `WindData` object.
 - `function formatLayout(forecasts, fetchTimestamp, hasPosition, slots)` concatenates the forecast entries into the final display string. A `•` (bullet) separator is inserted between consecutive slots. When no forecast data is available, it builds a slot-aware placeholder (`-/-•-/-•-/-` for 3 slots) using the `slots` parameter. No `units` parameter is needed since values are already converted. No interval selection logic is needed since the proxy performs it.
 - `function slotCount(width)` determines 1/2/3-slot layout from the field width. The current implementation uses this only for display truncation; the background service still requests 3 slots because cross-process slot-count sync is unresolved.
 - **Removed from watch**: `convertSpeed()`, `mpsToBeaufort()`, `directionLabel()`, `veerBackSymbol()` — all handled by the proxy or no longer applicable.
@@ -1018,3 +1030,28 @@ Changes across milestones:
 - `WindForceServiceDelegate.mc`: added `onActivityCompleted()` callback that exits with `{"kind" => "session_end"}`. Used untyped `activity` parameter to avoid `Activity.Sport`/`Activity.SubSport` resolution failure in `(:background)` scope.
 - Strict build (`-l 3`) passes. Release IQ package built for all 3 device variants.
 - Marked Milestone 7 as complete in Progress section.
+
+**Revision 12 (2026-03-20):** UI simplification — removed arrows display mode and added diagnostic logging.
+
+- Removed the arrows display mode, custom BMFont resources (`windforce_s/m/l`), and the `windDirection` setting due to OOM issues and visual problems with the custom font on the device.
+- Simplified `DisplayRenderer`: removed `dirToArrow()`, `useArrows`, `useCustomGlyphPlaceholders`. `renderWindSlot()` now always returns `W/GD` with cardinal labels.
+- Simplified `WindForceView`: removed custom font resource loading (`_WindForceFontLg/Md/Sm`), the dual font-family selection path (`selectCustomFontSize`, `shouldUseCustomFontFamily`), and the `_useArrows`/`_readDirectionSetting` logic.
+- Removed the `windDirection` property from `resources/properties/properties.xml` and its corresponding setting from `resources/settings/settings.xml`.
+- Removed BMFont resource definitions (`resources/fonts/resources.xml`) and all font files (`resources/fonts/windforce_*.fnt`, `resources/fonts/windforce_*.png`).
+- Removed 4 arrow-related unit tests from `test/Tests.mc` (25 Monkey C tests remain).
+- Added `source/DiagnosticsLog.mc`: a `(:background)` module with `log()` and `logResponseCode()` functions, centralised timestamp formatting, and a compile-time `ENABLE_DEVICE_LOGS` toggle.
+- Added diagnostic log calls in `WindForceApp.mc`, `WindForceServiceDelegate.mc`, and `FetchManager.mc`.
+- Updated Decision Log (2 entries: arrows removal, diagnostic logging), Surprises & Discoveries, Outcomes & Retrospective, DisplayRenderer interface description, and REQUIREMENTS.md.
+
+**Revision 13 (2026-03-20):** Forecast interval settings changed from absolute offsets to relative increments.
+
+- Both Immediate Interval and Imminent Interval now select +1h to +6h. Immediate is the offset from now; Imminent is the offset from Immediate. The proxy receives absolute values (e.g., `0,3,6`), computed as `slot2 = i1`, `slot3 = i1 + i2`.
+- `SettingsHelper.getSlotsString()`: rewritten to compute `slot3 = i1 + i2`. Removed `i2 > 6` slot suppression and the `_validateIntervals()` assumption comment.
+- `SettingsHelper.getInterval()`: default for interval 2 changed from 6 to 3.
+- `WindForceApp._validateIntervals()`: deleted entirely (20 lines). All combinations of +1..+6 are valid by construction.
+- `WindForceApp.onSettingsChanged()`: removed `_validateIntervals()` call.
+- `resources/properties/properties.xml`: `forecastInterval2` default changed from 6 to 3.
+- `resources/strings/strings.xml`: hour labels changed from `1h`-`6h` to `+1h`-`+6h`.
+- Proxy `parseSlots()` range raised from 0-7 to 0-12 (max slot3 = 6+6 = 12h). Updated corresponding unit test.
+- All 41 proxy tests pass. Strict build (`-l 3`) passes.
+- Updated Decision Log, REQUIREMENTS.md (settings table + validation paragraph replaced with increment description), README.md (settings table), RELEASE.md (new Unreleased entry).

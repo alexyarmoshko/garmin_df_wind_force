@@ -28,7 +28,10 @@ class FetchManager {
     //! "NO GPS" and the background service stops using stale coordinates.
     function updatePosition(info as Activity.Info) as Void {
         var loc = info.currentLocation;
-        if (loc == null) {
+        var acc = info.currentLocationAccuracy;
+        // Reject stale cached positions (QUALITY_LAST_KNOWN = 1).
+        // Require at least a 2D fix (QUALITY_POOR = 2) before accepting.
+        if (loc == null || acc == null || acc < Position.QUALITY_POOR) {
             if (hasPosition) {
                 DiagnosticsLog.log("gps_lost");
                 hasPosition = false;

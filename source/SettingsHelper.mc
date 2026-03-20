@@ -20,24 +20,24 @@ module SettingsHelper {
     }
 
     //! Build slots query parameter from interval settings.
-    //! Assumes _validateIntervals() has already ensured i2 > i1.
+    //! Both intervals are increments (+1h to +6h). Interval 1 is
+    //! the offset from now (0h); interval 2 is the offset from
+    //! interval 1. The proxy receives absolute hours: "0,i1,i1+i2".
     function getSlotsString() as String {
         var i1 = getInterval(1);
         var i2 = getInterval(2);
-        if (i2 > 6) {
-            return "0," + i1.toString();
-        }
-        return "0," + i1.toString() + "," + i2.toString();
+        var slot3 = i1 + i2;
+        return "0," + i1.toString() + "," + slot3.toString();
     }
 
-    //! Read a forecast interval setting.
+    //! Read a forecast interval setting (increment, +1h to +6h).
     function getInterval(which as Number) as Number {
         var key = (which == 1) ? "forecastInterval1" : "forecastInterval2";
         var val = Application.Properties.getValue(key);
         if (val instanceof Number && val >= 1 && val <= 6) {
             return val;
         }
-        return (which == 1) ? 3 : 6;
+        return 3;
     }
 
 }
