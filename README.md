@@ -7,28 +7,21 @@ A data field for Garmin Connect IQ that displays live wind forecast data during 
 Wind Force shows current and forecast wind conditions on your watch during a Kayak activity:
 
 - **Wind speed** and **gust speed** in your choice of units (Beaufort, Knots, mph, km/h, m/s)
-- **Direction Markers** as cardinal labels (N, NE, E, ...) or arrow characters (↓, ↙, ←, ...)
+- **Wind direction** as compact cardinal labels (N, NE, E, ...)
 
 Depending on the data field slot size, it displays 1 to 3 time slots so you can see how conditions are forecast to change over the next few hours.
 
 ```text
-Labels mode (default):
 3/4NE              Single slot: speed 3, gust 4, NE
 3/4NE•5/6S         Two slots: current + 3h forecast
 3/4NE•5/6S•3/5SW   Three slots: current + 3h + 6h
-
-Arrows mode:
-3/4↙               Single slot: speed 3, gust 4, wind from NE (blows SW)
-3/4↙•5/6↑          Two slots with arrows
 
 *3/4NE•5/6S        Stale data (>30 min old, prefixed with *)
 -/-                No forecast yet (1 slot)
 -/-•-/-•-/-        No forecast yet (3 slots)
 ```
 
-Slot count adapts dynamically — if the text overflows the field width even at the smallest font, slots are reduced until it fits.
-
-Implementation note: arrows mode uses custom BMFonts (`windforce_s`, `windforce_m`, `windforce_l`) while labels mode and `NO GPS` use built-in Garmin fonts. Internally, the custom-font path emits ASCII placeholder glyph ids (`|abcdefgh`) that map to the bullet separator and the 8 arrow glyphs in the BMFont atlas. This is an implementation detail only; the user-visible display still shows `•` and arrow symbols.
+Slot count adapts dynamically — if the text overflows the field width even at the smallest system font, slots are reduced until it fits.
 
 When GPS is first acquired (or reacquired after a loss), the data field triggers an immediate background fetch instead of waiting for the next 5-minute polling interval. When an activity ends, the forecast cache is cleared so the next session starts fresh.
 
@@ -77,8 +70,7 @@ garmin_df_wind_force/
     DisplayRenderer.mc   # Layout formatting
     StorageManager.mc    # Forecast cache management
     WindData.mc          # Forecast data model
-  resources/            # Strings, settings, images, custom fonts
-    fonts/              # Custom BMFont files (`windforce_*`) for arrow display mode
+  resources/            # Strings, settings, images
   proxy/                # Cloudflare Worker (TypeScript)
     src/                # Worker source code
     test/               # Unit tests (vitest) and E2E tests (curl)
@@ -142,12 +134,12 @@ npm run deploy      # Deploy to Cloudflare (wrangler deploy)
 # Build with unit tests enabled
 monkeyc --unit-test -d instinct2x -f monkey.jungle -o bin/WindForce-test.prg -y ~/.ssh/developer_key
 
-# Run in simulator (29 tests)
+# Run in simulator (25 tests)
 connectiq &
 monkeydo bin/WindForce-test.prg instinct2x -t
 ```
 
-Tests cover `StorageManager` (coordinate rounding, key parsing, distance calculation), `DisplayRenderer` (slot count thresholds, wind slot formatting, arrow direction mapping), and `WindData` initialization. The `(:test)` annotation strips all test code from release builds — zero impact on the 32 KB memory budget.
+Tests cover `StorageManager` (coordinate rounding, key parsing, distance calculation), `DisplayRenderer` (slot count thresholds and wind slot formatting), and `WindData` initialization. The `(:test)` annotation strips all test code from release builds — zero impact on the 32 KB memory budget.
 
 #### Proxy (TypeScript)
 
@@ -170,7 +162,6 @@ Settings are configurable via Garmin Connect Mobile or Garmin Express:
 | Setting | Options | Default |
 | ------- | ------- | ------- |
 | Wind units | Beaufort, Knots, mph, km/h, m/s | Beaufort |
-| Direction Markers | Labels (N, NE...), Arrows (↓, ↙...) | Labels |
 | Immediate Interval | 1h - 6h | 3h |
 | Imminent Interval | 1h - 6h | 6h |
 

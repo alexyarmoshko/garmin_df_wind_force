@@ -1,5 +1,4 @@
 import Toybox.Activity;
-import Toybox.Application;
 import Toybox.Application.Storage;
 import Toybox.Background;
 import Toybox.Graphics;
@@ -13,17 +12,11 @@ class WindForceView extends WatchUi.DataField {
     private var _slots as Number = 1;
     private var _fetchMgr as FetchManager;
 
-    // Custom BMFont resources for arrows display mode (lg > md > sm)
-    private var _WindForceFontLg as Graphics.FontType?;
-    private var _WindForceFontMd as Graphics.FontType?;
-    private var _WindForceFontSm as Graphics.FontType?;
-
     // Cached state — avoids Storage/Properties reads and object
     // allocations on every 1-second onUpdate() tick.
     private var _cacheValid as Boolean = false;
     private var _cachedDict as Dictionary? = null;
     private var _cachedForecasts as Array<WindData> = [] as Array<WindData>;
-    private var _useArrows as Boolean = false;
     // Last position used to build the cache (degrees).
     // Cache is invalidated when the device moves to a different grid cell.
     private var _lastCachedLat as Double = 0.0d;
@@ -37,9 +30,8 @@ class WindForceView extends WatchUi.DataField {
     private var _displayFont as Graphics.FontType = Graphics.FONT_XTINY;
     private var _wasStale as Boolean = false;
 
-    // Set by selectFontSize to indicate whether the returned font
-    // actually fits the field width, avoiding a redundant re-check
-    // in the slot-fitting loop.
+    // Set by selectBuiltInFontSize to indicate whether the returned
+    // font actually fits the field width.
     private var _fontFits as Boolean = false;
 
     (:typecheck(false))
@@ -47,10 +39,6 @@ class WindForceView extends WatchUi.DataField {
         DataField.initialize();
         _fetchMgr = new FetchManager();
         DisplayRenderer.init();
-        _readDirectionSetting();
-        _WindForceFontLg = WatchUi.loadResource($.Rez.Fonts.WindForceFontL);
-        _WindForceFontMd = WatchUi.loadResource($.Rez.Fonts.WindForceFontM);
-        _WindForceFontSm = WatchUi.loadResource($.Rez.Fonts.WindForceFontS);
     }
 
     function onLayout(dc as Dc) as Void {
@@ -75,7 +63,7 @@ class WindForceView extends WatchUi.DataField {
         }
 
         // Invalidate when position moves to a different grid cell
-        // (half grid step = 0.0125 deg ≈ 1.4 km)
+        // (half grid step = 0.0125 deg ~ 1.4 km)
         if (_fetchMgr.hasPosition) {
             var dLat = _fetchMgr.currentLatDeg - _lastCachedLat;
             var dLon = _fetchMgr.currentLonDeg - _lastCachedLon;
@@ -122,8 +110,6 @@ class WindForceView extends WatchUi.DataField {
     }
 
     function onUpdate(dc as Dc) as Void {
-        DisplayRenderer.useArrows = _useArrows;
-
         var bgColor = getBackgroundColor();
         var fgColor = (bgColor == Graphics.COLOR_WHITE) ?
             Graphics.COLOR_BLACK : Graphics.COLOR_WHITE;
@@ -145,7 +131,9 @@ class WindForceView extends WatchUi.DataField {
         var fetchTs = 0;
         if (_cachedDict != null) {
             var ft = (_cachedDict as Dictionary)["fetch_ts"];
-            if (ft instanceof Number) { fetchTs = ft as Number; }
+            if (ft instanceof Number) {
+                fetchTs = ft as Number;
+            }
         }
         var isStale = (fetchTs > 0 && (Time.now().value() - fetchTs) > STALE_THRESHOLD_SEC);
         if (isStale != _wasStale) {
@@ -158,14 +146,17 @@ class WindForceView extends WatchUi.DataField {
             var maxWidth = dc.getWidth() - 4;
             var slots = _slots;
             var text = "";
-            var useCustomFontFamily = shouldUseCustomFontFamily();
-            DisplayRenderer.useCustomGlyphPlaceholders = useCustomFontFamily;
-            // Default to smallest font in the active family
-            var font = (useCustomFontFamily && _WindForceFontSm != null) ?
-                _WindForceFontSm as Graphics.FontType : Graphics.FONT_XTINY;
+            // Default to smallest font
+            var font = Graphics.FONT_XTINY;
+
             while (slots > 0) {
-                text = DisplayRenderer.formatLayout(_cachedForecasts, isStale, _fetchMgr.hasPosition, slots);
-                font = selectFontSize(dc, text, maxWidth, useCustomFontFamily);
+                text = DisplayRenderer.formatLayout(
+                    _cachedForecasts,
+                    isStale,
+                    _fetchMgr.hasPosition,
+                    slots
+                );
+                font = selectBuiltInFontSize(dc, text, maxWidth);
                 if (_fontFits) {
                     break;
                 }
@@ -192,17 +183,10 @@ class WindForceView extends WatchUi.DataField {
         _cacheValid = false;
     }
 
-    //! Called by WindForceApp when settings change. Refreshes the cached
-    //! direction setting and invalidates forecast cache.
+    //! Called by WindForceApp when settings change.
+    //! Invalidates forecast cache.
     function onAppSettingsChanged() as Void {
-        _readDirectionSetting();
         _cacheValid = false;
-    }
-
-    //! Read the windDirection property into a cached boolean.
-    private function _readDirectionSetting() as Void {
-        var val = Application.Properties.getValue("windDirection");
-        _useArrows = (val instanceof Number && val == 1);
     }
 
     //! Parse forecast entries from a stored forecast dictionary.
@@ -266,48 +250,12 @@ class WindForceView extends WatchUi.DataField {
         return StorageManager.loadNearestForecast(latDeg, lonDeg);
     }
 
-    //! Decide whether to use the custom BMFont family or built-in Garmin fonts.
-    //! The custom font only contains digits, punctuation, bullets, and arrows,
-    //! so "NO GPS" must always use the built-in font family.
-    private function shouldUseCustomFontFamily() as Boolean {
-        return DisplayRenderer.useArrows && _fetchMgr.hasPosition;
-    }
-
-    //! Select the largest font size within the chosen family that fits
-    //! the field. Sets _fontFits to indicate whether the text actually
-    //! fits the returned font, so the caller can skip re-measuring.
-    private function selectFontSize(
+    //! Select the largest built-in Garmin font whose text width fits the field.
+    private function selectBuiltInFontSize(
         dc as Dc,
         text as String,
-        maxWidth as Number,
-        useCustomFontFamily as Boolean
+        maxWidth as Number
     ) as Graphics.FontType {
-        if (useCustomFontFamily) {
-            return selectCustomFontSize(dc, text, maxWidth);
-        }
-        return selectBuiltInFontSize(dc, text, maxWidth);
-    }
-
-    //! Select the largest custom BMFont size whose text width fits the field.
-    private function selectCustomFontSize(dc as Dc, text as String, maxWidth as Number) as Graphics.FontType {
-        if (_WindForceFontLg != null && dc.getTextWidthInPixels(text, _WindForceFontLg) <= maxWidth) {
-            _fontFits = true;
-            return _WindForceFontLg as Graphics.FontType;
-        }
-        if (_WindForceFontMd != null && dc.getTextWidthInPixels(text, _WindForceFontMd) <= maxWidth) {
-            _fontFits = true;
-            return _WindForceFontMd as Graphics.FontType;
-        }
-        if (_WindForceFontSm != null && dc.getTextWidthInPixels(text, _WindForceFontSm) <= maxWidth) {
-            _fontFits = true;
-            return _WindForceFontSm as Graphics.FontType;
-        }
-        _fontFits = false;
-        return (_WindForceFontSm != null) ? _WindForceFontSm as Graphics.FontType : Graphics.FONT_XTINY;
-    }
-
-    //! Select the largest built-in Garmin font whose text width fits the field.
-    private function selectBuiltInFontSize(dc as Dc, text as String, maxWidth as Number) as Graphics.FontType {
         var fonts = [
             Graphics.FONT_LARGE,
             Graphics.FONT_MEDIUM,

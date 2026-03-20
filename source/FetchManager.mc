@@ -30,6 +30,7 @@ class FetchManager {
         var loc = info.currentLocation;
         if (loc == null) {
             if (hasPosition) {
+                DiagnosticsLog.log("gps_lost");
                 hasPosition = false;
                 Storage.deleteValue("bg_lat");
                 Storage.deleteValue("bg_lon");
@@ -50,6 +51,7 @@ class FetchManager {
         // Detect no-GPS → GPS transition
         if (!hasPosition) {
             gpsJustAcquired = true;
+            DiagnosticsLog.log("gps_acquired");
         }
         hasPosition = true;
 
@@ -63,6 +65,7 @@ class FetchManager {
             Storage.setValue("bg_lon", currentLonDeg);
             _lastStoredLat = currentLatDeg;
             _lastStoredLon = currentLonDeg;
+            DiagnosticsLog.log("gps_persisted");
         }
     }
 

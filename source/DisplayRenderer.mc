@@ -1,5 +1,4 @@
 import Toybox.Lang;
-import Toybox.Time;
 import Toybox.WatchUi;
 
 // Layout width thresholds (px) -- tune after on-device testing
@@ -16,13 +15,6 @@ module DisplayRenderer {
     var sNoForecastSlot as String = "";
     var sStalePrefix as String = "";
     var sSlotSeparator as String = "";
-
-    // Display mode: when true, cardinal labels are replaced by arrow glyphs
-    var useArrows as Boolean = false;
-
-    // Internal mode for custom BMFonts that encode arrows/separators onto
-    // ASCII placeholder glyph ids instead of their Unicode code points.
-    var useCustomGlyphPlaceholders as Boolean = false;
 
     //! Load translatable strings from resources. Call once at startup.
     function init() as Void {
@@ -60,54 +52,25 @@ module DisplayRenderer {
             }
             var noData = sNoForecastSlot;
             for (var i = 1; i < slots; i++) {
-                noData += slotSeparator() + sNoForecastSlot;
+                noData += sSlotSeparator + sNoForecastSlot;
             }
             return noData;
         }
 
-        var result = "";
-
-        if (isStale) {
-            result = sStalePrefix;
-        }
-
+        var result = isStale ? sStalePrefix : "";
         var n = (forecasts.size() < slots) ? forecasts.size() : slots;
         result += renderWindSlot(forecasts[0]);
-        for (var i = 1; i < n; i++) {
-            result += slotSeparator();
-            result += renderWindSlot(forecasts[i]);
+        for (var j = 1; j < n; j++) {
+            result += sSlotSeparator;
+            result += renderWindSlot(forecasts[j]);
         }
 
         return result;
     }
 
-    //! Render a single time slot: "W/GD" (e.g. "9/23S") or "W/G↑" in arrows mode.
+    //! Render a single time slot: "W/GD" (e.g. "9/23S").
     function renderWindSlot(data as WindData) as String {
-        var dir = useArrows ? dirToArrow(data.windDir) : data.windDir;
-        return data.windSpeed.toString() + "/" + data.gustSpeed.toString() + dir;
-    }
-
-    //! Choose the separator matching the active font family.
-    function slotSeparator() as String {
-        return useCustomGlyphPlaceholders ? "|" : sSlotSeparator;
-    }
-
-    //! Map a cardinal "wind from" label to a BMFont placeholder glyph id.
-    //! The custom BMFont maps arrow glyphs to these ASCII code points.
-    //! Only called when useArrows && hasPosition, so the custom font is
-    //! always active — no Unicode fallback needed.
-    //! Returns the original label if no mapping exists.
-    function dirToArrow(dir as String) as String {
-        // Wind blows FROM the named direction; arrow shows where it goes TO.
-        if (dir.equals("N"))  { return "d"; } // ↓
-        if (dir.equals("NE")) { return "h"; } // ↙
-        if (dir.equals("E"))  { return "a"; } // ←
-        if (dir.equals("SE")) { return "e"; } // ↖
-        if (dir.equals("S"))  { return "b"; } // ↑
-        if (dir.equals("SW")) { return "f"; } // ↗
-        if (dir.equals("W"))  { return "c"; } // →
-        if (dir.equals("NW")) { return "g"; } // ↘
-        return dir;
+        return data.windSpeed.toString() + "/" + data.gustSpeed.toString() + data.windDir;
     }
 
 }

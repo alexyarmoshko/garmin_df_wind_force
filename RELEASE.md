@@ -7,8 +7,17 @@
 - **Immediate background fetch on GPS fix**: When the data field first acquires GPS (or reacquires it after a loss), a background fetch is scheduled at the earliest time permitted by Garmin's 5-minute constraint instead of waiting for the next polling interval. Reduces the initial no-forecast display duration from up to 5 minutes to near-instant in the common case.
 - **Improved display formatting**: Slot separator changed from `<` to `•` (bullet) for better readability. "No forecast" state now shows `-/-•-/-•-/-` (matching the slot count) instead of `---`, giving a clearer visual cue that data is expected but not yet available.
 - **Integer speed values guaranteed**: All wind and gust speed values are rounded to integers end-to-end (proxy → JSON → watch display). No decimal points are ever shown. This is a design guarantee for compatibility with smaller watch displays; integer precision is sufficient for paddling water activities.
-- **Direction Markers display setting**: New "Direction Markers" setting with two options — Labels (default: `N`, `NE`, ...) and Arrows (`↓`, `↙`, `←`, ...). Arrows show the actual direction the wind blows to, which is more intuitive for paddlers. The final implementation uses custom `windforce_*` BMFonts at 3 sizes; internally the renderer emits ASCII placeholder glyph ids for the separator and arrow symbols because direct higher-Unicode BMFont glyph ids were unreliable in Connect IQ runtime loading. Labels mode and `NO GPS` continue to use built-in Garmin fonts. Feature cost: +3.4 KB (+2.4 KB fonts, +1 KB code).
 - **Activity-completion cache pruning**: Cached forecasts and session GPS keys are cleared when an activity ends (saved or discarded). The next activity starts clean instead of showing stale data from a previous session. Dual cleanup hooks (`onActivityCompleted` in background + `onTimerReset` in foreground) ensure robustness.
+
+### Changed
+
+- **Display path simplified**: The watch now uses a single-line renderer with only built-in Garmin system fonts. The experimental two-line layout code was removed.
+- **Diagnostics logging trimmed**: Logs still include a human-readable timestamp, but event messages are now short fixed strings. Background fetch logs record only the event and HTTP response code.
+
+### Removed
+
+- **Direction Markers setting**: The labels/arrows toggle was removed. Wind direction is always shown as compact cardinal labels.
+- **Custom BMFont resources**: The `windforce_*` font resource definitions are no longer part of the build.
 
 ### Fixed
 
@@ -31,7 +40,7 @@ Initial release.
 
 ### Testing
 
-- **Watch app unit tests**: 29 Monkey C tests (via `Toybox.Test` / `(:test)` annotation) covering `StorageManager.roundCoord` (6 tests), `StorageManager.splitFcKey` (5 tests), `StorageManager.approxDistKm` (4 tests), `DisplayRenderer.slotCount` (6 tests), `DisplayRenderer.renderWindSlot` (3 tests), `DisplayRenderer.dirToArrow` (3 tests), `DisplayRenderer.renderWindSlot` arrow/label modes (2 tests), and `WindData` initialization. Stripped from release builds. Run with `monkeyc --unit-test` then `monkeydo -t`.
+- **Watch app unit tests**: 25 Monkey C tests (via `Toybox.Test` / `(:test)` annotation) covering `StorageManager.roundCoord` (6 tests), `StorageManager.splitFcKey` (5 tests), `StorageManager.approxDistKm` (4 tests), `DisplayRenderer.slotCount` (6 tests), `DisplayRenderer.renderWindSlot` (3 tests), and `WindData` initialization. Stripped from release builds. Run with `monkeyc --unit-test` then `monkeydo -t`.
 - **Proxy unit tests**: 41 vitest tests covering coordinate rounding, Beaufort conversion, unit conversions (including integer guarantee), direction labels, slot parsing/selection, and full response building. Run with `cd proxy && npm test`.
 - **Proxy E2E tests**: 34 curl-based tests against the deployed proxy covering routing, error handling, response structure, all 5 unit conversions, slot selection, coordinate rounding, and CORS headers. Run with `cd proxy && npm run test:e2e`.
 
