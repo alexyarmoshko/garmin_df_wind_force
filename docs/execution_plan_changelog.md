@@ -1,5 +1,14 @@
 # Execution Changelog
 
+## 2026-03-20
+
+- Simplified `source/WindForceView.mc` back to a single-line renderer and removed the uncommitted two-line display experiment.
+- Removed the direction-mode setting and custom BMFont path from `source/DisplayRenderer.mc`, `resources/settings/settings.xml`, `resources/properties/properties.xml`, and `resources/strings/strings.xml`.
+- Removed the BMFont resource definition and cleared the remaining files from `resources/fonts/`.
+- Reduced logging call-site work in `source/WindForceApp.mc`, `source/WindForceServiceDelegate.mc`, and `source/FetchManager.mc` so logs are short fixed strings or response-code entries only.
+- Updated `source/DiagnosticsLog.mc` to prepend human-readable timestamps centrally.
+- Verified successful builds for both `bin/WindForce.prg` and `bin/WindForce-test.prg`.
+- 
 ## 2026-03-19
 
 - Addressed code review v18 findings (`docs/code_review.v18.md`) — proxy backend:

@@ -20,6 +20,7 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
 
         if (lat == null || lon == null) {
             // No position available yet — exit immediately
+            DiagnosticsLog.log("fetch_skip");
             Background.exit({"kind" => "error", "rc" => -1});
             return;
         }
@@ -34,6 +35,7 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
 
         var rLat = GeoUtils.roundCoord(latDeg);
         var rLon = GeoUtils.roundCoord(lonDeg);
+        DiagnosticsLog.log("fetch_start");
 
         var url = "https://api-wind-force.kayakshaver.com/v1/forecast";
         var params = {
@@ -67,6 +69,7 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
             var rLon = Storage.getValue("bg_rLon");
             var rUnits = Storage.getValue("bg_reqUnits");
             var rSlots = Storage.getValue("bg_reqSlots");
+            DiagnosticsLog.logResponseCode("fetch_ok", responseCode);
             Background.exit({
                 "kind" => "forecast",
                 "payload" => data,
@@ -76,6 +79,7 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
                 "reqSlots" => (rSlots instanceof String) ? rSlots : ""
             });
         } else {
+            DiagnosticsLog.logResponseCode("fetch_fail", responseCode);
             Background.exit({
                 "kind" => "error",
                 "rc" => responseCode
@@ -87,6 +91,7 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
     //! Signals the foreground to clear cached forecasts.
     (:typecheck(false))
     function onActivityCompleted(activity) as Void {
+        DiagnosticsLog.log("activity_completed");
         Background.exit({"kind" => "session_end"});
     }
 

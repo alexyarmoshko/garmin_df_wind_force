@@ -18,6 +18,7 @@ class WindForceApp extends Application.AppBase {
     }
 
     function onStop(state as Dictionary?) as Void {
+        DiagnosticsLog.log("app_stop");
         Background.deleteTemporalEvent();
     }
 
@@ -27,6 +28,7 @@ class WindForceApp extends Application.AppBase {
         // Register background temporal event (5-min interval).
         // Using Duration means it fires immediately if >5 min since last run.
         Background.registerForTemporalEvent(new Time.Duration(5 * 60));
+        DiagnosticsLog.log("app_start");
         // Register for activity-completion events so the background
         // service can signal session-end cache cleanup.
         Background.registerForActivityCompletedEvent();
@@ -40,6 +42,7 @@ class WindForceApp extends Application.AppBase {
     // Foreground-only: references StorageManager and WatchUi (not in background scope)
     (:typecheck(false))
     function onSettingsChanged() as Void {
+        DiagnosticsLog.log("settings_changed");
         _validateIntervals();
         StorageManager.clearAllForecasts();
         var view = _getView();
@@ -99,6 +102,7 @@ class WindForceApp extends Application.AppBase {
                 // Storage cleanup runs unconditionally so it works even when
                 // the app was inactive and _view is null (deferred delivery).
                 // May be redundant with onTimerReset() — that is intentional.
+                DiagnosticsLog.log("bg_session_end");
                 StorageManager.clearAllForecasts();
                 Storage.deleteValue("bg_lat");
                 Storage.deleteValue("bg_lon");
@@ -122,6 +126,7 @@ class WindForceApp extends Application.AppBase {
                     var curUnits = SettingsHelper.getUnitsString();
                     var curSlots = SettingsHelper.getSlotsString();
                     if (!curUnits.equals(rUnits) || !curSlots.equals(rSlots)) {
+                        DiagnosticsLog.log("forecast_reject");
                         // Restore the repeating schedule even on rejection
                         Background.registerForTemporalEvent(new Time.Duration(5 * 60));
                         WatchUi.requestUpdate();
@@ -140,11 +145,21 @@ class WindForceApp extends Application.AppBase {
                         var payloadDict = payload as Dictionary;
                         payloadDict.put("fetch_ts", Time.now().value());
                         StorageManager.storeForecast(rLat, rLon, payloadDict);
+                        DiagnosticsLog.log("forecast_store");
                         var view = _getView();
                         if (view != null) {
                             (view as WindForceView).invalidateCache();
                         }
                     }
+                }
+            }
+
+            if ("error".equals(kind)) {
+                var rc = dict["rc"];
+                if (rc instanceof Number) {
+                    DiagnosticsLog.logResponseCode("bg_error", rc as Number);
+                } else {
+                    DiagnosticsLog.log("bg_error");
                 }
             }
         }
