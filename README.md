@@ -7,7 +7,7 @@ A data field for Garmin Connect IQ that displays live wind forecast data during 
 Wind Force shows current and forecast wind conditions on your watch during a Kayak activity:
 
 - **Wind speed** and **gust speed** in your choice of units (Beaufort, Knots, mph, km/h, m/s)
-- **Wind direction** as cardinal labels (N, NE, E, ...) or arrow characters (↓, ↙, ←, ...)
+- **Direction Markers** as cardinal labels (N, NE, E, ...) or arrow characters (↓, ↙, ←, ...)
 
 Depending on the data field slot size, it displays 1 to 3 time slots so you can see how conditions are forecast to change over the next few hours.
 
@@ -170,9 +170,9 @@ Settings are configurable via Garmin Connect Mobile or Garmin Express:
 | Setting | Options | Default |
 | ------- | ------- | ------- |
 | Wind units | Beaufort, Knots, mph, km/h, m/s | Beaufort |
-| Wind direction | Labels (N, NE...), Arrows (↓, ↙...) | Labels |
-| Forecast interval 1 | 1h - 6h | 3h |
-| Forecast interval 2 | 1h - 6h | 6h |
+| Direction Markers | Labels (N, NE...), Arrows (↓, ↙...) | Labels |
+| Immediate Interval | 1h - 6h | 3h |
+| Imminent Interval | 1h - 6h | 6h |
 
 ## Wind Speed Reference
 

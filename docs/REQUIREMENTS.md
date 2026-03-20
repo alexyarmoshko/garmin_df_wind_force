@@ -37,7 +37,7 @@ Examples:
 
 W - wind speed as a rounded integer (Beaufort Scale|Knots|mp/h|km/h|m/s)
 G - wind gust speed as a rounded integer (Beaufort Scale|Knots|mp/h|km/h|m/s)
-D - wind direction, displayed in one of two configurable formats:
+D - direction markers, displayed in one of two configurable formats:
     - **Labels** (default): cardinal/intercardinal text (N, NE, E, SE, S, SW, W, NW)
     - **Arrows**: arrow glyphs showing where the wind blows TO
       (N→↓, NE→↙, E→←, SE→↖, S→↑, SW→↗, W→→, NW→↘)
@@ -67,11 +67,11 @@ The following settings are configurable by the user via Garmin Connect Mobile or
 | Setting | Options | Default |
 |---|---|---|
 | Wind units | Beaufort, Knots, mph, km/h, m/s | Beaufort |
-| Wind direction | Labels (N, NE...), Arrows (↓, ↙...) | Labels |
-| Forecast interval 1 (S2) | 1h, 2h, 3h, 4h, 5h, 6h | 3h |
-| Forecast interval 2 (S3) | 1h, 2h, 3h, 4h, 5h, 6h | 6h |
+| Direction markers| Labels (N, NE...), Arrows (↓, ↙...) | Labels |
+| Immediate Interval (S2) | 1h, 2h, 3h, 4h, 5h, 6h | 3h |
+| Imminent Interval (S3) | 1h, 2h, 3h, 4h, 5h, 6h | 6h |
 
-Forecast interval 2 must be greater than forecast interval 1. When settings change,
+Imminent Interval must be greater than Immediate Interval. When settings change,
 `onSettingsChanged()` validates the pair and writes corrected values back to
 `Application.Properties` so the Garmin Connect settings UI reflects the effective
 configuration. If interval 2 is less than or equal to interval 1, it is corrected to

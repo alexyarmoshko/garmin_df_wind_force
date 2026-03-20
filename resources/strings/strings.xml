@@ -6,15 +6,15 @@
     <string id="Mph">mph</string>
     <string id="Kmh">km/h</string>
     <string id="Mps">m/s</string>
-    <string id="Interval1Title">Forecast Interval 1</string>
-    <string id="Interval2Title">Forecast Interval 2</string>
+    <string id="Interval1Title">Immediate Interval</string>
+    <string id="Interval2Title">Imminent Interval</string>
     <!-- Display strings -->
     <string id="NoGps">NO GPS</string>
     <string id="NoForecastSlot">-/-</string>
     <string id="StalePrefix">*</string>
     <string id="SlotSeparator">&#8226;</string>
-    <!-- Wind direction display -->
-    <string id="WindDirTitle">Wind Direction</string>
+    <!-- Direction markers display -->
+    <string id="WindDirTitle">Direction Markers</string>
     <string id="WindDirLabels">Labels (N, NE...)</string>
     <string id="WindDirArrows">Arrows</string>
     <!-- Time interval labels -->

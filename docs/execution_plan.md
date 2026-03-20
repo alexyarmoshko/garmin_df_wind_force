@@ -4,7 +4,7 @@ This Execution Plan is a living document. The sections Progress, Surprises & Dis
 
 ## Purpose / Big Picture
 
-After this work is complete, a kayaker wearing a Garmin Instinct 2X Solar will be able to add a "Wind Force" data field to their Kayak activity screen. During a paddle, the field will display the current wind speed (in Beaufort or other units), gust speed, and wind direction (as a cardinal compass label), all derived from Met Eireann's HARMONIE weather model. Depending on the data field slot size chosen by the user, the display shows one, two, or three time slots separated by `•`, so the paddler can see how conditions are forecast to change over the next few hours.
+After this work is complete, a kayaker wearing a Garmin Instinct 2X Solar will be able to add a "Wind Force" data field to their Kayak activity screen. During a paddle, the field will display the current wind speed (in Beaufort or other units), gust speed, and wind direction markers (as a cardinal compass label), all derived from Met Eireann's HARMONIE weather model. Depending on the data field slot size chosen by the user, the display shows one, two, or three time slots separated by `•`, so the paddler can see how conditions are forecast to change over the next few hours.
 
 The data flows from Met Eireann's XML API through a Cloudflare Worker proxy (which translates XML to compact JSON and caches results) to the watch via the paired phone's internet connection. When connectivity is lost, previously fetched data is displayed with a staleness indicator. Nearest-grid offline fallback is implemented now; look-ahead caching was deferred after the background-service rework and remains planned follow-up work.
 
@@ -87,7 +87,7 @@ To see it working: deploy the Cloudflare Worker, side-load the data field onto t
   Rationale: Smaller watch displays (e.g., narrow data field slots on future devices) cannot accommodate decimal digits, and integer precision is sufficient for paddling water activities. The proxy's `convertMps()` applies `Math.round()` for all unit conversions (knots, mph, km/h, m/s) and `mpsToBeaufort()` returns an integer by table lookup. The watch-side `WindData` type stores values as Monkey C `Number` (integer). This guarantee is enforced by a dedicated proxy unit test that verifies `Number.isInteger()` across all units with fractional m/s inputs.
   Date/Author: 2026-03-18
 
-- Decision: Wind direction display mode (Labels vs Arrows) is implemented watch-side only, with no proxy API changes.
+- Decision: Wind direction markers display mode (Labels vs Arrows) is implemented watch-side only, with no proxy API changes.
   Rationale: The proxy returns cardinal labels ("N", "NE", etc.) for all requests. The watch maps those to arrow glyphs in `DisplayRenderer.dirToArrow()`. In the final BMFont implementation, the custom-font path emits ASCII placeholder glyph ids for the slot separator and arrows, while labels mode continues to use normal text. Moving any of this to the proxy would add a query parameter, complicate the API, and require cache invalidation on direction-format changes — all disproportionate to the problem. The watch has sufficient memory for the mapping code and the 3 custom BMFont sizes. The direction setting does not affect cached data, so changing it requires only a display refresh, not a refetch.
   Date/Author: 2026-03-18
 
@@ -729,7 +729,7 @@ Milestone 1 steps:
 Each milestone has its own validation section above. The overall acceptance criteria for the complete project:
 
 1. A Kayak activity on a supported device (Instinct 2X Solar or Instinct 2) displays the Wind Force data field with live Met Eireann wind data.
-2. The display shows wind speed, gust speed, and wind direction label, with a `•` separator between adjacent time slots.
+2. The display shows wind speed, gust speed, and direction marker, with a `•` separator between adjacent time slots.
 3. Multiple time slots are shown when the data field occupies a wider screen slot.
 4. Wind units are configurable (Beaufort, Knots, mph, km/h, m/s) via Garmin Connect Mobile.
 5. Forecast intervals for the 2nd and 3rd time slots are configurable (1-6 hours).
