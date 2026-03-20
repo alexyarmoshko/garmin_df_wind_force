@@ -38,42 +38,17 @@ class WindForceApp extends Application.AppBase {
     }
 
     //! Called when settings change via Garmin Connect Mobile / Express.
-    //! Validates interval pair, clears cached forecasts, and refreshes display.
+    //! Clears cached forecasts and refreshes display.
     // Foreground-only: references StorageManager and WatchUi (not in background scope)
     (:typecheck(false))
     function onSettingsChanged() as Void {
         DiagnosticsLog.log("settings_changed");
-        _validateIntervals();
         StorageManager.clearAllForecasts();
         var view = _getView();
         if (view != null) {
             (view as WindForceView).onAppSettingsChanged();
         }
         WatchUi.requestUpdate();
-    }
-
-    //! Ensure forecastInterval2 > forecastInterval1.
-    //! Writes corrected values back to Application.Properties so the
-    //! Garmin Connect settings UI reflects the effective configuration.
-    private function _validateIntervals() as Void {
-        var i1v = Application.Properties.getValue("forecastInterval1");
-        var i2v = Application.Properties.getValue("forecastInterval2");
-        if (!(i1v instanceof Number) || !(i2v instanceof Number)) {
-            return;
-        }
-        var i1 = i1v as Number;
-        var i2 = i2v as Number;
-        if (i2 > i1) {
-            return; // Already valid
-        }
-        // Correct: bump i2 to i1 + 1 when possible
-        if (i1 < 6) {
-            Application.Properties.setValue("forecastInterval2", i1 + 1);
-        } else {
-            // i1 = 6 leaves no valid i2; reduce i1 to make room
-            Application.Properties.setValue("forecastInterval1", 5);
-            Application.Properties.setValue("forecastInterval2", 6);
-        }
     }
 
     //! Access the stored view reference (typed as Object? to stay

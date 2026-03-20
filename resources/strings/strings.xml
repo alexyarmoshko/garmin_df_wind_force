@@ -13,11 +13,11 @@
     <string id="NoForecastSlot">-/-</string>
     <string id="StalePrefix">*</string>
     <string id="SlotSeparator">&#8226;</string>
-    <!-- Time interval labels -->
-    <string id="Hour1">1h</string>
-    <string id="Hour2">2h</string>
-    <string id="Hour3">3h</string>
-    <string id="Hour4">4h</string>
-    <string id="Hour5">5h</string>
-    <string id="Hour6">6h</string>
+    <!-- Time interval labels (increments) -->
+    <string id="Hour1">+1h</string>
+    <string id="Hour2">+2h</string>
+    <string id="Hour3">+3h</string>
+    <string id="Hour4">+4h</string>
+    <string id="Hour5">+5h</string>
+    <string id="Hour6">+6h</string>
 </strings>

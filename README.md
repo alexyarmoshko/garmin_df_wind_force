@@ -69,6 +69,9 @@ garmin_df_wind_force/
     FetchManager.mc      # GPS position tracking
     DisplayRenderer.mc   # Layout formatting
     StorageManager.mc    # Forecast cache management
+    SettingsHelper.mc    # Shared settings access (foreground + background)
+    DiagnosticsLog.mc    # Device logging (toggled at compile time)
+    GeoUtils.mc          # Coordinate rounding
     WindData.mc          # Forecast data model
   resources/            # Strings, settings, images
   proxy/                # Cloudflare Worker (TypeScript)
@@ -139,7 +142,7 @@ connectiq &
 monkeydo bin/WindForce-test.prg instinct2x -t
 ```
 
-Tests cover `StorageManager` (coordinate rounding, key parsing, distance calculation), `DisplayRenderer` (slot count thresholds and wind slot formatting), and `WindData` initialization. The `(:test)` annotation strips all test code from release builds — zero impact on the 32 KB memory budget.
+Tests cover `GeoUtils` (coordinate rounding), `StorageManager` (key parsing, distance calculation), `DisplayRenderer` (slot count thresholds and wind slot formatting), and `WindData` initialization. The `(:test)` annotation strips all test code from release builds — zero impact on the 32 KB memory budget.
 
 #### Proxy (TypeScript)
 
@@ -162,8 +165,8 @@ Settings are configurable via Garmin Connect Mobile or Garmin Express:
 | Setting | Options | Default |
 | ------- | ------- | ------- |
 | Wind units | Beaufort, Knots, mph, km/h, m/s | Beaufort |
-| Immediate Interval | 1h - 6h | 3h |
-| Imminent Interval | 1h - 6h | 6h |
+| Immediate Interval | +1h - +6h (offset from now) | +3h |
+| Imminent Interval | +1h - +6h (offset from Immediate) | +3h |
 
 ## Wind Speed Reference
 

@@ -177,7 +177,7 @@ describe("parseSlots", () => {
 
   it("filters invalid values", () => {
     expect(parseSlots("0,abc,3")).toEqual([0, 3]);
-    expect(parseSlots("-1,0,8")).toEqual([0]); // -1 and 8 out of 0-7 range
+    expect(parseSlots("-1,0,13")).toEqual([0]); // -1 and 13 out of 0-12 range
   });
 
   it("handles whitespace", () => {

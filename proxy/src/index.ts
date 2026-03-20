@@ -86,7 +86,7 @@ function parseSlots(slotsParam: string | null): number[] {
   const parts = slotsParam
     .split(",")
     .map((s) => parseInt(s.trim(), 10))
-    .filter((n) => !isNaN(n) && n >= 0 && n <= 7);
+    .filter((n) => !isNaN(n) && n >= 0 && n <= 12);
   if (parts.length === 0) return [0];
   return parts.slice(0, 3); // max 3 slots
 }

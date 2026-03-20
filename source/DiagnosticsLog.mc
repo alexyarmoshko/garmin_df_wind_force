@@ -7,7 +7,7 @@ import Toybox.Time.Gregorian;
 module DiagnosticsLog {
 
     // Toggle field-test device logging here.
-    const ENABLE_DEVICE_LOGS = true;
+    const ENABLE_DEVICE_LOGS = false;
 
     //! Write a compact diagnostic line to the device log when enabled.
     function log(message as String) as Void {

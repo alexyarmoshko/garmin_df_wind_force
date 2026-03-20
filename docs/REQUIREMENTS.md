@@ -37,28 +37,15 @@ Examples:
 
 W - wind speed as a rounded integer (Beaufort Scale|Knots|mp/h|km/h|m/s)
 G - wind gust speed as a rounded integer (Beaufort Scale|Knots|mp/h|km/h|m/s)
-D - direction markers, displayed in one of two configurable formats:
-    - **Labels** (default): cardinal/intercardinal text (N, NE, E, SE, S, SW, W, NW)
-    - **Arrows**: arrow glyphs showing where the wind blows TO
-      (N→↓, NE→↙, E→←, SE→↖, S→↑, SW→↗, W→→, NW→↘)
+D - wind direction as compact cardinal/intercardinal text (N, NE, E, SE, S, SW, W, NW)
 `•` - bullet separator between adjacent time slots
 
 All speed values are **always rounded to integers** — no decimal points are ever displayed.
 This is a design constraint: smaller watch displays cannot accommodate fractional digits,
 and integer precision is sufficient for paddling water activities.
 
-Arrows mode uses custom bitmap fonts (BMFont format) at 3 sizes (`windforce_s`, `windforce_m`,
-`windforce_l`). The proxy always returns cardinal labels; the arrow mapping is performed on the
-watch in `DisplayRenderer`.
-
-Implementation note: because Connect IQ BMFont loading proved unreliable for the equivalent higher
-Unicode code points, the final custom-font path stores the bullet separator and arrow glyphs on
-ASCII placeholder ids (`|abcdefgh`) inside the BMFont atlas. `DisplayRenderer` emits those
-placeholders only when the custom font family is active. This is internal only and is not exposed
-in the settings UI.
-
 The layout shown depends on the data field position selected by the user on the activity screen.
-All layouts occupy a single line.
+All layouts occupy a single line. Only built-in Garmin system fonts are used.
 
 ## User Configuration
 
@@ -67,19 +54,18 @@ The following settings are configurable by the user via Garmin Connect Mobile or
 | Setting | Options | Default |
 |---|---|---|
 | Wind units | Beaufort, Knots, mph, km/h, m/s | Beaufort |
-| Direction markers| Labels (N, NE...), Arrows (↓, ↙...) | Labels |
-| Immediate Interval (S2) | 1h, 2h, 3h, 4h, 5h, 6h | 3h |
-| Imminent Interval (S3) | 1h, 2h, 3h, 4h, 5h, 6h | 6h |
+| Immediate Interval (S2) | +1h, +2h, +3h, +4h, +5h, +6h | +3h |
+| Imminent Interval (S3) | +1h, +2h, +3h, +4h, +5h, +6h | +3h |
 
-Imminent Interval must be greater than Immediate Interval. When settings change,
-`onSettingsChanged()` validates the pair and writes corrected values back to
-`Application.Properties` so the Garmin Connect settings UI reflects the effective
-configuration. If interval 2 is less than or equal to interval 1, it is corrected to
-interval 1 + 1h. If interval 1 is 6h (leaving no valid interval 2), interval 1 is
-reduced to 5h and interval 2 set to 6h. The background service retains its own
-normalization as a safety net, though its behaviour differs in the `interval1 = 6`
-edge case: rather than reducing interval 1, it suppresses the third slot and emits
-a 2-slot request.
+Both interval settings are increments. Immediate Interval is the hour offset from
+now (0h) to the second time slot. Imminent Interval is the hour offset from the
+second slot to the third slot. With the defaults (+3h, +3h), the three display
+slots show forecasts at +0h, +3h, and +6h. Every combination is valid by design,
+so no cross-field validation is needed. The maximum third-slot offset is +12h
+(+6h + +6h).
+
+When the user changes either interval, `onSettingsChanged()` clears cached
+forecasts and triggers a background refetch with the new slot values.
 
 Implementation note (2026-03-14):
 
