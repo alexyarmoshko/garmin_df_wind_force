@@ -113,12 +113,36 @@ Or use VS Code:
 2. `Ctrl+Shift+P` > **Monkey C: Run on Simulator**
 3. In the simulator: load `test/dublin_bay.gpx`, start playback, then **Simulation > Trigger Background Event** to fetch data
 
-### Side-loading to Device
+### Installation & Testing
+
+There are two ways to load the app onto your watch for testing. Because of how the Connect IQ Store operates, sideloading directly via USB has significant limitations.
+
+#### 1. Beta App via Connect IQ Store (Recommended)
+
+To fully test the app and access its Settings menu via your phone, you must upload it as a "Beta App" to the Garmin Developer Dashboard. Beta apps are private to your developer account.
+
+**Installation Workaround:**
+Garmin currently has a bug where the "Download" or "Send to Device" button is often missing on the Developer Dashboard. To install a Beta app:
+
+1. Go to your Developer Dashboard and select your Beta app.
+2. Copy the app identifier (the long alphanumeric UUID at the end of the dashboard URL).
+3. Send this exact URL to your mobile phone: `https://apps.garmin.com/en-US/apps/<YOUR_APP_IDENTIFIER>`
+4. Open (tap on) the link on your phone. It will automatically open the Connect IQ mobile app directly to your Beta app's hidden store page.
+5. Tap the "Install" button!
+
+#### 2. Side-loading via USB
 
 1. `make dist` to build the release IQ package
 2. Connect your Instinct 2 / 2X via USB
 3. Copy `bin/WindForce.prg` (from inside the IQ, or the device-specific build) to the watch's `GARMIN/APPS/` directory
 4. Disconnect the watch — Wind Force appears in the data field picker for Kayak activities
+
+**Sideloading Restrictions:** 
+A sideloaded app is not recognized by the Garmin Connect mobile app.
+
+- The Connect IQ phone app handles it as an empty item or just increments your "My Data Fields" count.
+- You **cannot** access or change its App Settings via Garmin Express or the Connect IQ phone app.
+- To use custom settings with a sideloaded app, you must simulate them in the Connect IQ Simulator first, generating a `.SET` file, or simply test via the Beta App method above.
 
 ### Proxy Development
 
