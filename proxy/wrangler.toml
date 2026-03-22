@@ -12,3 +12,9 @@ zone_name = "kayakshaver.com"
 
 # Without routes, the Worker deploys to:
 #   https://wind-force-proxy.<your-account>.workers.dev
+
+[observability]
+[observability.logs]
+enabled = true
+invocation_logs = true
+
