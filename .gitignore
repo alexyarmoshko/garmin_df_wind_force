@@ -15,3 +15,5 @@ node_modules/
 .wrangler/
 __pycache__/
 docs/.internal/
+.keys/
+source/gen/Env.mc
