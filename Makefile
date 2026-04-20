@@ -2,6 +2,7 @@ SHELL := bash
 
 ENV_SETUP := test -f ".env" || { echo ".env not found"; exit 1; }; \
 	set -a; source "./.env"; set +a; \
+	: "$${BASE_URL:?BASE_URL not set - add it to .env}"; \
 	: "$${SDK_HOME:?SDK_HOME not set - add it to .env}"; \
 	: "$${DEV_KEY:?DEV_KEY not set - add it to .env}"
 
@@ -11,6 +12,8 @@ DEVICE   := instinct2x
 APP      := WindForce
 PROXY_DIR := proxy
 PROXY_ENV_FILE := $(abspath .env)
+GEN_DIR := source/gen
+GEN_ENV_MC := $(GEN_DIR)/Env.mc
 
 OUT := bin
 
@@ -21,21 +24,32 @@ OUT := bin
 
 build: $(OUT)/$(APP).prg
 
-$(OUT)/$(APP).prg: $(wildcard source/*.mc) $(wildcard resources/**/*.xml) manifest.xml $(JUNGLE)
+$(GEN_ENV_MC): .env Makefile
+	@$(ENV_SETUP); \
+	mkdir -p "$(GEN_DIR)"; \
+	printf '%s\n' \
+		'(:background)' \
+		'module Env {' \
+		'' \
+		"    const FORECAST_URL = \"$$BASE_URL/v1/forecast\";" \
+		'' \
+		'}' > "$(GEN_ENV_MC)"
+
+$(OUT)/$(APP).prg: $(wildcard source/*.mc) $(wildcard resources/**/*.xml) manifest.xml $(JUNGLE) $(GEN_ENV_MC)
 	@$(ENV_SETUP); \
 	MC="$$SDK_HOME/bin/monkeyc"; \
 	"$$MC" -w -d "$(DEVICE)" -l 3 -f "$(JUNGLE)" -y "$$DEV_KEY" -o "$@"
 
 dist: $(OUT)/$(APP).iq
 
-$(OUT)/$(APP).iq: $(wildcard source/*.mc) $(wildcard resources/**/*.xml) manifest.xml $(JUNGLE)
+$(OUT)/$(APP).iq: $(wildcard source/*.mc) $(wildcard resources/**/*.xml) manifest.xml $(JUNGLE) $(GEN_ENV_MC)
 	@$(ENV_SETUP); \
 	MC="$$SDK_HOME/bin/monkeyc"; \
 	"$$MC" -e -w -r -f "$(JUNGLE)" -y "$$DEV_KEY" -o "$@"
 
 clean:
 	@rm -f $(OUT)/*.prg $(OUT)/*.prg.debug.xml $(OUT)/*-settings.json \
-	      $(OUT)/*.iq $(OUT)/build_log.zip
+	      $(OUT)/*.iq $(OUT)/build_log.zip $(GEN_ENV_MC)
 	@rm -rf $(OUT)/gen $(OUT)/mir $(OUT)/internal-mir $(OUT)/external-mir
 
 info:

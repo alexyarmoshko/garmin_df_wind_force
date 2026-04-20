@@ -1,9 +1,26 @@
 #!/usr/bin/env bash
 # End-to-end tests for the deployed Wind Force proxy.
 # Usage: bash proxy/test/e2e.sh [base_url]
-# Default base URL: https://example.invalid
+# Default base URL: BASE_URL from root .env, or the deployed production URL.
 
-BASE="${1:-https://example.invalid}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ROOT_ENV="$ROOT_DIR/.env"
+
+default_base_url() {
+  if [[ -f "$ROOT_ENV" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ROOT_ENV"
+    set +a
+    if [[ -n "${BASE_URL:-}" ]]; then
+      printf '%s\n' "$BASE_URL"
+      return
+    fi
+  fi
+}
+
+BASE="${1:-$(default_base_url)}"
 CURL="curl -s --max-time 15"
 PASS=0
 FAIL=0

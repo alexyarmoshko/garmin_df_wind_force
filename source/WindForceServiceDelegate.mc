@@ -37,7 +37,7 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
         var rLon = GeoUtils.roundCoord(lonDeg);
         DiagnosticsLog.log("fetch_start");
 
-        var url = "https://example.invalid/v1/forecast";
+        var url = Env.FORECAST_URL;
         var params = {
             "lat" => latDeg.format("%.3f"),
             "lon" => lonDeg.format("%.3f"),

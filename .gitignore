@@ -16,4 +16,4 @@ node_modules/
 __pycache__/
 docs/.internal/
 .keys/
-source/gen/Env.mc
+source/gen/
