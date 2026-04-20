@@ -14,6 +14,8 @@
 
 - **Display path simplified**: The watch now uses a single-line renderer with only built-in Garmin system fonts. The experimental two-line layout code was removed.
 - **Forecast intervals are now increments**: Both Immediate Interval and Imminent Interval settings are now relative offsets (+1h to +6h). Immediate is the offset from now; Imminent is the offset from the Immediate slot. Defaults changed from (3h, 6h) to (+3h, +3h), producing the same `0,3,6` slot query. All combinations are valid by design — the cross-field validation logic (`_validateIntervals()`) has been removed. Maximum third-slot offset is +12h.
+- **Shared bash/make environment file**: The root `.env` now uses bash `export` syntax and the Makefile loads it by sourcing through bash. One `.env` file can now be reused directly by both `make` targets and shell scripts.
+- **Wrangler config is now generated as JSONC**: The checked-in `proxy/wrangler.toml` has been replaced by `proxy/wrangler.jsonc.template` plus a generated `proxy/.wrangler/gen/wrangler.jsonc`. Root `make proxy-*` targets now delegate into `proxy/Makefile`, which uses `yq.exe` and values from the root `.env` to build the deployable config on demand. This follows Cloudflare's current recommendation to use `wrangler.jsonc` for new projects.
 
 ### Removed
 

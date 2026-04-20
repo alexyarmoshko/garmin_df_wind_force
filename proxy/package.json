@@ -2,11 +2,14 @@
   "name": "wind-force-proxy",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:e2e": "bash test/e2e.sh"
+    "config": "make config",
+    "clean": "make clean",
+    "dev": "make dev",
+    "deploy": "make deploy",
+    "info": "make info",
+    "typecheck": "make typecheck",
+    "test": "make test",
+    "test:e2e": "make test-e2e"
   },
   "dependencies": {
     "fast-xml-parser": "^5.5.8"

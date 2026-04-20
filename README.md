@@ -77,7 +77,8 @@ garmin_df_wind_force/
   proxy/                # Cloudflare Worker (TypeScript)
     src/                # Worker source code
     test/               # Unit tests (vitest) and E2E tests (curl)
-    wrangler.toml       # Cloudflare deployment config
+    wrangler.jsonc.template  # Template for generated Wrangler config
+    .wrangler/gen/      # Generated local Wrangler JSON config (gitignored)
   test/                 # Monkey C unit tests and GPX test routes
   docs/                 # Requirements and execution plan
 ```
@@ -88,16 +89,24 @@ garmin_df_wind_force/
 
 - [Garmin Connect IQ SDK](https://developer.garmin.com/connect-iq/overview/) 8.2.3+
 - VS Code with [Monkey C extension](https://marketplace.visualstudio.com/items?itemName=garmin.monkey-c)
+- GNU Make and a bash-compatible shell. On Windows, run the make-based commands from Git Bash.
 - Node.js (for the proxy; [Wrangler](https://developers.cloudflare.com/workers/wrangler/) is installed as a local devDependency)
+- [`yq`](https://github.com/mikefarah/yq) (`yq.exe` on Windows) for generating the local Wrangler JSON config from the template
 
 ### Build & Run (Data Field)
 
-Create a `.env` file in the project root with your SDK paths:
+Create a bash-compatible `.env` file in the project root. `make` sources the same file through bash, so you can reuse it from shell scripts without keeping a second env file:
 
 ```env
-CIQ_HOME = $(HOME)/AppData/Roaming/Garmin/ConnectIQ
-SDK_HOME = $(CIQ_HOME)/Sdks/connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21
-KEY      = /c/Users/<you>/.ssh/developer_key
+export SDK_HOME="${HOME}/AppData/Roaming/Garmin/ConnectIQ/Sdks/connectiq-sdk-win-8.2.3-2025-08-11-cac5b3b21"
+export DEV_KEY="~/.ssh/developer_key"
+export PROXY_NAME="cf-worker-proxy-name"
+export PROXY_KV_ID="00000000000000000000000000000000"
+export PROXY_ZONE="example.com"
+export BASE_NAME="api.example.com"
+# optional overrides for generated wrangler.jsonc
+# export PROXY_ROUTE_PATTERN="${BASE_NAME}/*"
+# export WRANGLER_COMPAT_DATE="2026-04-20"
 ```
 
 ```bash
@@ -147,11 +156,34 @@ A sideloaded app is not recognized by the Garmin Connect mobile app.
 ### Proxy Development
 
 ```bash
-cd proxy
-npm install
-npm run dev         # Local development (wrangler dev)
-npm run deploy      # Deploy to Cloudflare (wrangler deploy)
+npm --prefix proxy install
+make proxy-config   # Generate proxy/.wrangler/gen/wrangler.jsonc from .env + template
+make proxy-dev      # Local development (wrangler dev --config ...)
+make proxy-deploy   # Deploy to Cloudflare (wrangler deploy --config ...)
 ```
+
+From inside `proxy/`, the equivalent commands are:
+
+```bash
+make config
+make dev
+make deploy
+```
+
+The `proxy/package.json` scripts delegate to these make targets, so `npm run dev`, `npm run deploy`, and related commands also require GNU Make and a bash-compatible shell.
+
+The generated Wrangler config is written to `proxy/.wrangler/gen/wrangler.jsonc`, which stays out of git. The repository now uses JSON config because Cloudflare currently recommends `wrangler.jsonc` for new projects.
+
+Proxy config variables in the root `.env`:
+
+- `PROXY_NAME`: Worker name used by Wrangler.
+- `PROXY_KV_ID`: Cloudflare KV namespace ID for forecast caching.
+- `PROXY_ZONE`: Cloudflare zone name for the route, for example `example.com`.
+- `BASE_NAME`: Hostname used to derive the default route pattern, for example `api.example.com`.
+- `PROXY_ROUTE_PATTERN`: optional explicit route pattern. Defaults to `${BASE_NAME}/*`.
+- `WRANGLER_COMPAT_DATE`: optional Wrangler compatibility date override. Defaults to `2026-04-20`.
+
+The KV binding name is fixed as `FORECAST_CACHE` in both Wrangler config and Worker code.
 
 ### Testing
 
