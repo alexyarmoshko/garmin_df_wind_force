@@ -16,10 +16,29 @@ const CORS_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",
 };
 
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
 /** Round a coordinate to the nearest 0.025 deg (~2.5 km HARMONIE grid). */
 function roundCoord(value: number): string {
   // Convert to integer grid steps first so midpoint rounding stays stable.
   return (Math.round(value * 40) / 40).toFixed(3);
+}
+
+async function hashCoordPair(lat: string, lon: string): Promise<string> {
+  const payload = new TextEncoder().encode(`${lat},${lon}`);
+  const digest = await crypto.subtle.digest("SHA-256", payload);
+  return bytesToHex(new Uint8Array(digest));
+}
+
+async function buildForecastCacheKey(
+  roundedLat: string,
+  roundedLon: string,
+  modelRun: string
+): Promise<string> {
+  const coordHash = await hashCoordPair(roundedLat, roundedLon);
+  return `forecast_${coordHash}_${modelRun}`;
 }
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -204,7 +223,11 @@ async function handleForecast(url: URL, env: Env): Promise<Response> {
     });
   }
 
-  const cacheKey = `forecast_${roundedLat}_${roundedLon}_${modelRun}`;
+  const cacheKey = await buildForecastCacheKey(
+    roundedLat,
+    roundedLon,
+    modelRun
+  );
 
   // Check for cached raw forecast
   let raw: RawForecastResponse;
@@ -228,7 +251,11 @@ async function handleForecast(url: URL, env: Env): Promise<Response> {
     }
 
     raw = { model_run: effectiveModelRun, forecasts };
-    const rawKey = `forecast_${roundedLat}_${roundedLon}_${effectiveModelRun}`;
+    const rawKey = await buildForecastCacheKey(
+      roundedLat,
+      roundedLon,
+      effectiveModelRun
+    );
     await env.FORECAST_CACHE.put(rawKey, JSON.stringify(raw), {
       expirationTtl: FORECAST_TTL,
     });
@@ -283,4 +310,6 @@ export {
   selectCurrentEntry,
   selectClosest,
   buildResponse,
+  hashCoordPair,
+  buildForecastCacheKey,
 };

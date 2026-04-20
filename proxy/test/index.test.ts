@@ -8,6 +8,8 @@ import {
   selectCurrentEntry,
   selectClosest,
   buildResponse,
+  hashCoordPair,
+  buildForecastCacheKey,
   type WindUnit,
 } from "../src/index";
 import type { RawForecastEntry, RawForecastResponse } from "../src/types";
@@ -403,5 +405,29 @@ describe("buildResponse", () => {
     ]);
     const result = buildResponse(raw, "beaufort", [0]);
     expect(result.model_run).toBe("2026-03-17T06:00:00Z");
+  });
+});
+
+// ДД hashed cache keys ДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДДД
+
+describe("hashed forecast cache keys", () => {
+  it("hashes the coordinate pair deterministically", async () => {
+    await expect(hashCoordPair("53.350", "-6.225")).resolves.toBe(
+      "e20eb1475d70bec24f93ea2caeb4f9012213473ae31305831472400e9a2e1a56"
+    );
+  });
+
+  it("builds cache keys without plaintext coordinates", async () => {
+    const key = await buildForecastCacheKey(
+      "53.350",
+      "-6.225",
+      "2026-03-17T06:00:00Z"
+    );
+
+    expect(key).toBe(
+      "forecast_e20eb1475d70bec24f93ea2caeb4f9012213473ae31305831472400e9a2e1a56_2026-03-17T06:00:00Z"
+    );
+    expect(key).not.toContain("53.350");
+    expect(key).not.toContain("-6.225");
   });
 });
