@@ -128,7 +128,7 @@ Hosted on Cloudflare Workers free tier (100,000 requests/day, KV storage include
 }
 ```
 
-- KV cache key: `{rounded_lat}_{rounded_lon}_{model_run}`
+- KV cache key: `forecast_{sha256("{rounded_lat},{rounded_lon}")}_{model_run}`
 - KV TTL: 7 hours (model run interval is 6h, with buffer)
 
 ### Proxy JSON Response Size

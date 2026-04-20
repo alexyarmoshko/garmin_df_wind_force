@@ -16,6 +16,7 @@
 - **Forecast intervals are now increments**: Both Immediate Interval and Imminent Interval settings are now relative offsets (+1h to +6h). Immediate is the offset from now; Imminent is the offset from the Immediate slot. Defaults changed from (3h, 6h) to (+3h, +3h), producing the same `0,3,6` slot query. All combinations are valid by design — the cross-field validation logic (`_validateIntervals()`) has been removed. Maximum third-slot offset is +12h.
 - **Shared bash/make environment file**: The root `.env` now uses bash `export` syntax and the Makefile loads it by sourcing through bash. One `.env` file can now be reused directly by both `make` targets and shell scripts.
 - **Wrangler config is now generated as JSONC**: The checked-in `proxy/wrangler.toml` has been replaced by `proxy/wrangler.jsonc.template` plus a generated `proxy/.wrangler/gen/wrangler.jsonc`. Root `make proxy-*` targets now delegate into `proxy/Makefile`, which uses `yq.exe` and values from the root `.env` to build the deployable config on demand. This follows Cloudflare's current recommendation to use `wrangler.jsonc` for new projects.
+- **Forecast KV cache keys are now hashed**: The proxy now stores raw forecast entries under `forecast_<sha256(rounded_lat,rounded_lon)>_<model_run>` instead of embedding rounded coordinates directly in the KV key. Cache behaviour is unchanged; the goal is to avoid plaintext coordinate-bearing metadata in KV.
 
 ### Removed
 
@@ -44,7 +45,7 @@ Initial release.
 ### Testing
 
 - **Watch app unit tests**: 25 Monkey C tests (via `Toybox.Test` / `(:test)` annotation) covering `StorageManager.roundCoord` (6 tests), `StorageManager.splitFcKey` (5 tests), `StorageManager.approxDistKm` (4 tests), `DisplayRenderer.slotCount` (6 tests), `DisplayRenderer.renderWindSlot` (3 tests), and `WindData` initialization. Stripped from release builds. Run with `monkeyc --unit-test` then `monkeydo -t`.
-- **Proxy unit tests**: 41 vitest tests covering coordinate rounding, Beaufort conversion, unit conversions (including integer guarantee), direction labels, slot parsing/selection, and full response building. Run with `cd proxy && npm test`.
+- **Proxy unit tests**: 43 vitest tests covering coordinate rounding, Beaufort conversion, unit conversions (including integer guarantee), direction labels, slot parsing/selection, hashed KV cache keys, and full response building. Run with `cd proxy && npm test`.
 - **Proxy E2E tests**: 34 curl-based tests against the deployed proxy covering routing, error handling, response structure, all 5 unit conversions, slot selection, coordinate rounding, and CORS headers. Run with `cd proxy && npm run test:e2e`.
 
 ### Technical Details

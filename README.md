@@ -42,7 +42,7 @@ Cloudflare Worker proxy --> Met Eireann HARMONIE API
 Watch (Application.Storage) --> Display
 ```
 
-The watch cannot parse XML directly. A lightweight Cloudflare Worker translates Met Eireann's XML forecasts into compact JSON (~300-500 bytes). Requests route through the paired phone's internet connection via Garmin Connect Mobile.
+The watch cannot parse XML directly. A lightweight Cloudflare Worker translates Met Eireann's XML forecasts into compact JSON (~300-500 bytes). Requests route through the paired phone's internet connection via Garmin Connect Mobile. Raw forecast responses are cached in Cloudflare KV for 7 hours, keyed by a SHA-256 hash of the rounded forecast cell plus the model run timestamp so KV metadata does not expose plaintext rounded coordinates.
 
 Connect IQ data fields cannot make direct HTTP requests. A background service (`System.ServiceDelegate`) fires every 5 minutes, reads the current GPS position from `Application.Storage`, fetches forecast data from the proxy, and returns the response to the main process via `Background.exit()`.
 
@@ -204,7 +204,7 @@ Tests cover `GeoUtils` (coordinate rounding), `StorageManager` (key parsing, dis
 
 ```bash
 cd proxy
-npm test            # Unit tests (vitest, 41 tests, runs offline)
+npm test            # Unit tests (vitest, 43 tests, runs offline)
 npm run test:e2e    # E2E tests (curl against deployed proxy, 34 tests)
 ```
 
