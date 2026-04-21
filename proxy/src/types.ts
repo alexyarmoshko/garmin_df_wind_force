@@ -1,5 +1,7 @@
 export interface Env {
   FORECAST_CACHE: KVNamespace;
+  APP_IDS: string[];
+  APP_AUTH_SECRET: string;
 }
 
 /** Raw forecast entry as parsed from Met Eireann XML (stored in KV cache). */

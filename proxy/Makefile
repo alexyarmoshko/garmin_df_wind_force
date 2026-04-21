@@ -17,7 +17,7 @@ ENV_SETUP := test -f "$(ROOT_ENV_FILE)" || { echo "Root .env not found at $(ROOT
 	: "$${PROXY_ZONE:?PROXY_ZONE not set - add it to .env}"; \
 	: "$${BASE_NAME:?BASE_NAME not set - add it to .env}"
 
-.PHONY: config dev deploy clean info typecheck test test-e2e
+.PHONY: config dev deploy clean info typecheck test test-e2e secret-app-auth
 
 config: $(WRANGLER_CONFIG)
 
@@ -31,13 +31,19 @@ $(WRANGLER_CONFIG): $(WRANGLER_TEMPLATE) Makefile $(ROOT_ENV_FILE)
 	fi; \
 	export PROXY_ROUTE_PATTERN="$${PROXY_ROUTE_PATTERN:-$${BASE_NAME}/*}"; \
 	export WRANGLER_COMPAT_DATE="$(WRANGLER_COMPAT_DATE)"; \
-	"$$YQ_BIN" -p json -o json '.["$$schema"] = "$(WRANGLER_SCHEMA_PATH)" | .name = strenv(PROXY_NAME) | .main = "$(WRANGLER_MAIN_PATH)" | .compatibility_date = strenv(WRANGLER_COMPAT_DATE) | .workers_dev = false | .route.pattern = strenv(PROXY_ROUTE_PATTERN) | .route.zone_name = strenv(PROXY_ZONE) | .kv_namespaces = [{"binding": "FORECAST_CACHE", "id": strenv(PROXY_KV_ID)}] | .observability.enabled = true | .observability.logs.enabled = true | .observability.logs.invocation_logs = true' "$(WRANGLER_TEMPLATE)" > "$(WRANGLER_CONFIG)"
+	"$$YQ_BIN" -p json -o json '.["$$schema"] = "$(WRANGLER_SCHEMA_PATH)" | .name = strenv(PROXY_NAME) | .main = "$(WRANGLER_MAIN_PATH)" | .compatibility_date = strenv(WRANGLER_COMPAT_DATE) | .workers_dev = false | .route.pattern = strenv(PROXY_ROUTE_PATTERN) | .route.zone_name = strenv(PROXY_ZONE) | .kv_namespaces = [{"binding": "FORECAST_CACHE", "id": strenv(PROXY_KV_ID)}] | .secrets.required = ["APP_AUTH_SECRET"] | .observability.enabled = true | .observability.logs.enabled = true | .observability.logs.invocation_logs = true' "$(WRANGLER_TEMPLATE)" > "$(WRANGLER_CONFIG)"
 
 dev: config
 	@$(WRANGLER) dev --config "$(WRANGLER_CONFIG)"
 
 deploy: config
 	@$(WRANGLER) deploy --config "$(WRANGLER_CONFIG)"
+
+secret-app-auth: config
+	@$(ENV_SETUP); \
+	: "$${APP_AUTH_SECRET_FILE:?APP_AUTH_SECRET_FILE not set - add it to .env}"; \
+	test -f "$$APP_AUTH_SECRET_FILE" || { echo "APP_AUTH_SECRET_FILE not found at $$APP_AUTH_SECRET_FILE"; exit 1; }; \
+	$(WRANGLER) secret put APP_AUTH_SECRET --config "$(WRANGLER_CONFIG)" < "$$APP_AUTH_SECRET_FILE"
 
 typecheck:
 	@npx --no-install tsc --noEmit

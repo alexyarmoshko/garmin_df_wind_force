@@ -9,6 +9,8 @@
 - **Integer speed values guaranteed**: All wind and gust speed values are rounded to integers end-to-end (proxy → JSON → watch display). No decimal points are ever shown. This is a design guarantee for compatibility with smaller watch displays; integer precision is sufficient for paddling water activities.
 - **Activity-completion cache pruning**: Cached forecasts and session GPS keys are cleared when an activity ends (saved or discarded). The next activity starts clean instead of showing stale data from a previous session. Dual cleanup hooks (`onActivityCompleted` in background + `onTimerReset` in foreground) ensure robustness.
 - **Diagnostic logging**: New `DiagnosticsLog` module provides structured device logging with human-readable timestamps, controlled by a compile-time `ENABLE_DEVICE_LOGS` toggle. Event messages are short fixed strings; background fetch logs record the event and HTTP response code. Logging calls added to app lifecycle, settings changes, background data handling, and fetch events.
+- **Generated app-auth and manifest constants**: The watch build now generates `source/gen/Env.mc` with `FORECAST_URL`, `APP_AUTH_SECRET`, `APP_ID`, and `APP_VER`. `APP_AUTH_SECRET` is loaded from the file path configured in root `.env`, while app ID/version are parsed from `manifest.xml`.
+- **App-auth secret file generation target**: Added `make app-auth-secret-ensure` to create the local secret file when missing or empty, and `make app-auth-secret-generate` to rotate it explicitly.
 
 ### Changed
 
@@ -16,6 +18,8 @@
 - **Forecast intervals are now increments**: Both Immediate Interval and Imminent Interval settings are now relative offsets (+1h to +6h). Immediate is the offset from now; Imminent is the offset from the Immediate slot. Defaults changed from (3h, 6h) to (+3h, +3h), producing the same `0,3,6` slot query. All combinations are valid by design — the cross-field validation logic (`_validateIntervals()`) has been removed. Maximum third-slot offset is +12h.
 - **Shared bash/make environment file**: The root `.env` now uses bash `export` syntax and the Makefile loads it by sourcing through bash. One `.env` file can now be reused directly by both `make` targets and shell scripts.
 - **Wrangler config is now generated as JSONC**: The checked-in `proxy/wrangler.toml` has been replaced by `proxy/wrangler.jsonc.template` plus a generated `proxy/.wrangler/gen/wrangler.jsonc`. Root `make proxy-*` targets now delegate into `proxy/Makefile`, which uses `yq.exe` and values from the root `.env` to build the deployable config on demand. This follows Cloudflare's current recommendation to use `wrangler.jsonc` for new projects.
+- **Proxy app metadata and secret plumbing**: The watch build still generates manifest-derived `APP_ID`, but the Wrangler template now owns any proxy-side app ID list manually via `APP_IDS`. `APP_AUTH_SECRET` remains a required Worker secret, and `make proxy-secret-app-auth` uploads it from the file path configured in root `.env`.
+- **Build-time secret bootstrap**: `make build` now ensures `APP_AUTH_SECRET_FILE` exists before `source/gen/Env.mc` is generated, so the watch env generation step no longer depends on manual file creation.
 - **Forecast KV cache keys are now hashed**: The proxy now stores raw forecast entries under `forecast_<sha256(rounded_lat,rounded_lon)>_<model_run>` instead of embedding rounded coordinates directly in the KV key. Cache behaviour is unchanged; the goal is to avoid plaintext coordinate-bearing metadata in KV.
 
 ### Removed

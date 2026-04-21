@@ -20,5 +20,8 @@
       "enabled": true,
       "invocation_logs": true
     }
+  },
+  "vars": {
+    "APP_IDS": ["384eef47-978a-48c0-ad33-31bdfe9ec18f"]
   }
 }

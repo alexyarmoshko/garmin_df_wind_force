@@ -104,12 +104,15 @@ export PROXY_NAME="cf-worker-proxy-name"
 export PROXY_KV_ID="00000000000000000000000000000000"
 export PROXY_ZONE="example.com"
 export BASE_NAME="api.example.com"
+export APP_AUTH_SECRET_FILE=".keys/app_auth_secret.txt"
 # optional overrides for generated wrangler.jsonc
 # export PROXY_ROUTE_PATTERN="${BASE_NAME}/*"
 # export WRANGLER_COMPAT_DATE="2026-04-20"
 ```
 
 ```bash
+make app-auth-secret-ensure    # Create APP_AUTH_SECRET_FILE if missing or empty
+make app-auth-secret-generate  # Regenerate APP_AUTH_SECRET_FILE with a new random value
 make build    # Debug build (strict type checking, -l 3)
 make dist     # Release IQ package for all devices
 make clean    # Remove build artifacts
@@ -160,6 +163,7 @@ npm --prefix proxy install
 make proxy-config   # Generate proxy/.wrangler/gen/wrangler.jsonc from .env + template
 make proxy-dev      # Local development (wrangler dev --config ...)
 make proxy-deploy   # Deploy to Cloudflare (wrangler deploy --config ...)
+make proxy-secret-app-auth  # Push APP_AUTH_SECRET into Cloudflare Worker secret storage
 ```
 
 From inside `proxy/`, the equivalent commands are:
@@ -174,16 +178,21 @@ The `proxy/package.json` scripts delegate to these make targets, so `npm run dev
 
 The generated Wrangler config is written to `proxy/.wrangler/gen/wrangler.jsonc`, which stays out of git. The repository now uses JSON config because Cloudflare currently recommends `wrangler.jsonc` for new projects.
 
+Manual Worker vars that should not be synthesized from `.env` can live directly in `proxy/wrangler.jsonc.template`. The template currently includes an `APP_IDS` placeholder under `vars`; populate that manually when the proxy should allow multiple app IDs.
+
 Proxy config variables in the root `.env`:
 
 - `PROXY_NAME`: Worker name used by Wrangler.
 - `PROXY_KV_ID`: Cloudflare KV namespace ID for forecast caching.
 - `PROXY_ZONE`: Cloudflare zone name for the route, for example `example.com`.
 - `BASE_NAME`: Hostname used to derive the default route pattern, for example `api.example.com`.
+- `APP_AUTH_SECRET_FILE`: path to the file containing the shared app-auth secret consumed by both the watch build and `make proxy-secret-app-auth`.
 - `PROXY_ROUTE_PATTERN`: optional explicit route pattern. Defaults to `${BASE_NAME}/*`.
 - `WRANGLER_COMPAT_DATE`: optional Wrangler compatibility date override. Defaults to `2026-04-20`.
 
-The KV binding name is fixed as `FORECAST_CACHE` in both Wrangler config and Worker code.
+The KV binding name is fixed as `FORECAST_CACHE` in both Wrangler config and Worker code. The watch build still derives `APP_ID` from `manifest.xml` for `source/gen/Env.mc`, but the proxy Wrangler config no longer injects a singular app ID automatically. `APP_AUTH_SECRET` is declared as a required Worker secret and uploaded separately with `make proxy-secret-app-auth`.
+
+`make build` now ensures `APP_AUTH_SECRET_FILE` exists before generating `source/gen/Env.mc`. If the file is missing or empty, it is created automatically with a random value. Use `make app-auth-secret-generate` when you want to rotate it deliberately, then rerun `make proxy-secret-app-auth` to upload the new value.
 
 ### Testing
 
