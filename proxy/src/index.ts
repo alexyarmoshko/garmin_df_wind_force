@@ -6,6 +6,12 @@ import {
   ForecastResponse,
 } from "./types";
 import { fetchAndParseForecast, fetchModelRunTimestamp } from "./met-eireann";
+import {
+  APP_AUTH_TS_WINDOW_SECONDS,
+  collectSecrets,
+  decryptEnvelope,
+  verifyAppAuth,
+} from "./privacy";
 
 const API_VERSION = "v1";
 const FORECAST_TTL = 25_200; // 7 hours
@@ -182,37 +188,19 @@ function buildResponse(
 
 // ── /v1/forecast ──────────────────────────────────────────────────────
 
-async function handleForecast(url: URL, env: Env): Promise<Response> {
-  const latParam = url.searchParams.get("lat");
-  const lonParam = url.searchParams.get("lon");
-
-  if (!latParam || !lonParam) {
-    return errorResponse("Missing lat or lon parameter", 400);
-  }
-
-  const lat = parseFloat(latParam);
-  const lon = parseFloat(lonParam);
-
-  if (
-    isNaN(lat) ||
-    isNaN(lon) ||
-    lat < -90 ||
-    lat > 90 ||
-    lon < -180 ||
-    lon > 180
-  ) {
-    return errorResponse("Invalid lat or lon value", 400);
-  }
-
+/**
+ * Shared forecast business logic. Used by both the legacy plaintext
+ * `?lat=&lon=` path and the encrypted `?q=` path.
+ */
+async function serveForecast(
+  lat: number,
+  lon: number,
+  unit: WindUnit,
+  slots: number[],
+  env: Env
+): Promise<Response> {
   const roundedLat = roundCoord(lat);
   const roundedLon = roundCoord(lon);
-
-  // Parse optional units and slots params
-  const unitsParam = url.searchParams.get("units") ?? "beaufort";
-  const unit: WindUnit = VALID_UNITS.has(unitsParam)
-    ? (unitsParam as WindUnit)
-    : "beaufort";
-  const slots = parseSlots(url.searchParams.get("slots"));
 
   // Resolve the current model run for the cache key
   let modelRun = await env.FORECAST_CACHE.get("latest_model_run");
@@ -266,6 +254,95 @@ async function handleForecast(url: URL, env: Env): Promise<Response> {
   return jsonResponse(response);
 }
 
+function parseLatLon(latParam: string, lonParam: string): { lat: number; lon: number } | null {
+  const lat = parseFloat(latParam);
+  const lon = parseFloat(lonParam);
+  if (
+    isNaN(lat) ||
+    isNaN(lon) ||
+    lat < -90 ||
+    lat > 90 ||
+    lon < -180 ||
+    lon > 180
+  ) {
+    return null;
+  }
+  return { lat, lon };
+}
+
+async function handleForecast(
+  request: Request,
+  url: URL,
+  env: Env
+): Promise<Response> {
+  const q = url.searchParams.get("q");
+  const latParam = url.searchParams.get("lat");
+  const lonParam = url.searchParams.get("lon");
+
+  if (q != null) {
+    // Encrypted path. Reject mixed-mode requests up front.
+    if (latParam != null || lonParam != null) {
+      return errorResponse("Mixed-mode request not allowed", 400);
+    }
+
+    if (q.length > 1024) {
+      return errorResponse("Encrypted payload too large", 400);
+    }
+
+    const secrets = collectSecrets(env);
+    if (secrets.length === 0) {
+      return errorResponse("Server not configured", 500);
+    }
+
+    const nowS = Math.floor(Date.now() / 1000);
+    const auth = await verifyAppAuth(request, q, url, secrets, nowS);
+    if (!auth.ok) {
+      return errorResponse("Unauthorized", 403);
+    }
+
+    const dec = await decryptEnvelope(q, secrets);
+    if (!dec.ok) {
+      return errorResponse("Bad encrypted payload", 400);
+    }
+
+    // Payload ts must match the header ts and itself be inside the window.
+    if (dec.payload.ts !== auth.ts) {
+      return errorResponse("Payload timestamp mismatch", 403);
+    }
+    if (Math.abs(nowS - dec.payload.ts) > APP_AUTH_TS_WINDOW_SECONDS) {
+      return errorResponse("Payload timestamp out of window", 403);
+    }
+
+    const parsed = parseLatLon(dec.payload.lat, dec.payload.lon);
+    if (!parsed) {
+      return errorResponse("Invalid lat or lon value", 400);
+    }
+    const unit: WindUnit = VALID_UNITS.has(dec.payload.units)
+      ? (dec.payload.units as WindUnit)
+      : "beaufort";
+    const slots = parseSlots(dec.payload.slots);
+    return serveForecast(parsed.lat, parsed.lon, unit, slots, env);
+  }
+
+  // Legacy plaintext path. No app-auth verification here, by design.
+  if (!latParam || !lonParam) {
+    return errorResponse("Missing lat or lon parameter", 400);
+  }
+
+  const parsed = parseLatLon(latParam, lonParam);
+  if (!parsed) {
+    return errorResponse("Invalid lat or lon value", 400);
+  }
+
+  const unitsParam = url.searchParams.get("units") ?? "beaufort";
+  const unit: WindUnit = VALID_UNITS.has(unitsParam)
+    ? (unitsParam as WindUnit)
+    : "beaufort";
+  const slots = parseSlots(url.searchParams.get("slots"));
+
+  return serveForecast(parsed.lat, parsed.lon, unit, slots, env);
+}
+
 // ── Worker entry point ────────────────────────────────────────────────
 
 export default {
@@ -289,7 +366,7 @@ export default {
     switch (url.pathname) {
       case "/v1/forecast":
         try {
-          return await handleForecast(url, env);
+          return await handleForecast(request, url, env);
         } catch {
           return errorResponse("Upstream API failure or parsing error", 502);
         }
@@ -312,4 +389,5 @@ export {
   buildResponse,
   hashCoordPair,
   buildForecastCacheKey,
+  handleForecast,
 };

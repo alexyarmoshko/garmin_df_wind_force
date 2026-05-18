@@ -4,6 +4,7 @@ import Toybox.Background;
 import Toybox.Communications;
 import Toybox.Lang;
 import Toybox.System;
+import Toybox.Time;
 
 (:background)
 class WindForceServiceDelegate extends System.ServiceDelegate {
@@ -37,16 +38,52 @@ class WindForceServiceDelegate extends System.ServiceDelegate {
         var rLon = GeoUtils.roundCoord(lonDeg);
         DiagnosticsLog.log("fetch_start");
 
+        // Derive keys from APP_AUTH_SECRET once per wake.
+        var keys = WindForceCrypto.deriveKeys(Env.APP_AUTH_SECRET);
+
+        // Build encrypted payload.
+        var ts = Time.now().value();
+        var plaintext = WindForceCrypto.buildPlaintextJson(
+            latDeg.format("%.3f"),
+            lonDeg.format("%.3f"),
+            units,
+            slots,
+            ts
+        );
+        var q = WindForceCrypto.encryptPayload(
+            plaintext,
+            keys[:encKey] as ByteArray,
+            keys[:macKey] as ByteArray
+        );
+
+        // Compute the app-auth MAC over the canonical request bytes.
+        var canonical = WindForceCrypto.canonicalizeMacInput(
+            "GET",
+            "/v1/forecast",
+            q,
+            ts.toString(),
+            Env.APP_NAME,
+            Env.APP_ID,
+            Env.APP_VER
+        );
+        var authMacBytes = WindForceCrypto.hmacSha256(
+            keys[:authKey] as ByteArray,
+            canonical
+        );
+        var authMac = WindForceCrypto.base64urlEncode(authMacBytes);
+
         var url = Env.FORECAST_URL;
-        var params = {
-            "lat" => latDeg.format("%.3f"),
-            "lon" => lonDeg.format("%.3f"),
-            "units" => units,
-            "slots" => slots
-        };
+        var params = { "q" => q };
         var options = {
             :method => Communications.HTTP_REQUEST_METHOD_GET,
-            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON,
+            :headers => {
+                "X-WF-App" => Env.APP_NAME,
+                "X-WF-AppID" => Env.APP_ID,
+                "X-WF-App-Ver" => Env.APP_VER,
+                "X-WF-App-Ts" => ts.toString(),
+                "X-WF-App-Mac" => authMac
+            }
         };
 
         // Store request metadata so onForecastReceived can include it

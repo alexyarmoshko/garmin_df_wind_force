@@ -73,6 +73,7 @@ garmin_df_wind_force/
     DiagnosticsLog.mc    # Device logging (toggled at compile time)
     GeoUtils.mc          # Coordinate rounding
     WindData.mc          # Forecast data model
+    WindForceCrypto.mc   # AES-CBC + HMAC-SHA256 encrypted forecast transport
   resources/            # Strings, settings, images
   proxy/                # Cloudflare Worker (TypeScript)
     src/                # Worker source code
@@ -104,15 +105,18 @@ export PROXY_NAME="cf-worker-proxy-name"
 export PROXY_KV_ID="00000000000000000000000000000000"
 export PROXY_ZONE="example.com"
 export BASE_NAME="api.example.com"
-export APP_AUTH_SECRET_FILE=".keys/app_auth_secret.txt"
+export APP_AUTH_SECRET_DIR=".keys"
+export APP_AUTH_SECRET_FILE=".keys/app_auth_20260418_01.txt"
+# Set only during a rotation grace window:
+# export APP_AUTH_SECRET_PREV_FILE=".keys/app_auth_<previous>.txt"
 # optional overrides for generated wrangler.jsonc
 # export PROXY_ROUTE_PATTERN="${BASE_NAME}/*"
 # export WRANGLER_COMPAT_DATE="2026-04-20"
 ```
 
 ```bash
-make app-auth-secret-ensure    # Create APP_AUTH_SECRET_FILE if missing or empty
-make app-auth-secret-generate  # Regenerate APP_AUTH_SECRET_FILE with a new random value
+make app-auth-secret-ensure    # Validate APP_AUTH_SECRET_FILE exists and is non-empty (never creates)
+make app-auth-secret-generate  # Generate a new timestamped candidate under APP_AUTH_SECRET_DIR (never overwrites)
 make build    # Debug build (strict type checking, -l 3)
 make dist     # Release IQ package for all devices
 make clean    # Remove build artifacts
@@ -160,10 +164,12 @@ A sideloaded app is not recognized by the Garmin Connect mobile app.
 
 ```bash
 npm --prefix proxy install
-make proxy-config   # Generate proxy/.wrangler/gen/wrangler.jsonc from .env + template
-make proxy-dev      # Local development (wrangler dev --config ...)
-make proxy-deploy   # Deploy to Cloudflare (wrangler deploy --config ...)
-make proxy-secret-app-auth  # Push APP_AUTH_SECRET into Cloudflare Worker secret storage
+make -C proxy config            # Generate proxy/.wrangler/gen/wrangler.jsonc from .env + template
+make -C proxy dev               # Local development (wrangler dev --config ...)
+make -C proxy deploy            # Deploy to Cloudflare (wrangler deploy --config ...)
+make -C proxy secret-app-auth   # Push APP_AUTH_SECRET into Cloudflare Worker secret storage
+make -C proxy secret-app-auth-prev        # Push APP_AUTH_SECRET_PREV (used during rotation grace window)
+make -C proxy secret-app-auth-prev-clear  # Remove APP_AUTH_SECRET_PREV after rotation completes
 ```
 
 From inside `proxy/`, the equivalent commands are:
@@ -172,7 +178,12 @@ From inside `proxy/`, the equivalent commands are:
 make config
 make dev
 make deploy
+make secret-app-auth
+make secret-app-auth-prev
+make secret-app-auth-prev-clear
 ```
+
+The root `Makefile` no longer proxies these targets; the watch-app and proxy build pipelines are kept independent. Both still source the same root `.env` (the proxy `Makefile` reads it via `ROOT_ENV_FILE` and resolves relative secret paths against the repository root).
 
 The `proxy/package.json` scripts delegate to these make targets, so `npm run dev`, `npm run deploy`, and related commands also require GNU Make and a bash-compatible shell.
 
@@ -186,13 +197,32 @@ Proxy config variables in the root `.env`:
 - `PROXY_KV_ID`: Cloudflare KV namespace ID for forecast caching.
 - `PROXY_ZONE`: Cloudflare zone name for the route, for example `example.com`.
 - `BASE_NAME`: Hostname used to derive the default route pattern, for example `api.example.com`.
-- `APP_AUTH_SECRET_FILE`: path to the file containing the shared app-auth secret consumed by both the watch build and `make proxy-secret-app-auth`.
+- `APP_AUTH_SECRET_DIR`: directory where `make app-auth-secret-generate` writes new timestamped candidate secret files. Defaults to `.keys`. Never implicitly selects the active secret.
+- `APP_AUTH_SECRET_FILE`: explicit path to the file containing the active app-auth secret. This is the only file compiled into `source/gen/Env.mc` and uploaded to the Worker as `APP_AUTH_SECRET` by `make -C proxy secret-app-auth`.
+- `APP_AUTH_SECRET_PREV_FILE`: explicit path to the previous secret file, set only during a rotation grace window. Uploaded to the Worker as `APP_AUTH_SECRET_PREV` by `make -C proxy secret-app-auth-prev`.
 - `PROXY_ROUTE_PATTERN`: optional explicit route pattern. Defaults to `${BASE_NAME}/*`.
 - `WRANGLER_COMPAT_DATE`: optional Wrangler compatibility date override. Defaults to `2026-04-20`.
 
-The KV binding name is fixed as `FORECAST_CACHE` in both Wrangler config and Worker code. The watch build still derives `APP_ID` from `manifest.xml` for `source/gen/Env.mc`, but the proxy Wrangler config no longer injects a singular app ID automatically. `APP_AUTH_SECRET` is declared as a required Worker secret and uploaded separately with `make proxy-secret-app-auth`.
+The KV binding name is fixed as `FORECAST_CACHE` in both Wrangler config and Worker code. The watch build still derives `APP_ID` from `manifest.xml` for `source/gen/Env.mc`, but the proxy Wrangler config no longer injects a singular app ID automatically. `APP_AUTH_SECRET` is declared as a required Worker secret and uploaded separately with `make -C proxy secret-app-auth`. `APP_AUTH_SECRET_PREV` is optional and used only during a rotation grace window.
 
-`make build` now ensures `APP_AUTH_SECRET_FILE` exists before generating `source/gen/Env.mc`. If the file is missing or empty, it is created automatically with a random value. Use `make app-auth-secret-generate` when you want to rotate it deliberately, then rerun `make proxy-secret-app-auth` to upload the new value.
+### Privacy-preserving forecast transport
+
+Watch builds no longer send `lat`/`lon` in URL query parameters. Coordinates and request metadata are wrapped into a single opaque `q` Base64URL parameter encrypted with AES-256-CBC + HMAC-SHA256 under keys derived from `APP_AUTH_SECRET`, plus an `X-WF-App-*` header pair that binds the request to the build. The legacy plaintext `?lat=&lon=` path is kept live as a deprecated route until the existing external test client is retired. See the privacy transport design document for the wire format, key schedule, and interoperability test vectors.
+
+### App-auth secret rotation
+
+Secrets live in `APP_AUTH_SECRET_DIR` (default `.keys/`) under a fixed pattern `app_auth_<YYYYMMDD>_<NN>.txt`. Generation never overwrites; rotation is driven by editing `.env` to point `APP_AUTH_SECRET_FILE` at a new candidate, after first uploading the current file as `APP_AUTH_SECRET_PREV` so older watch builds continue to authenticate during the grace window. The runbook:
+
+1. Verify the current `APP_AUTH_SECRET_FILE` is uploaded as `APP_AUTH_SECRET`.
+2. Set `APP_AUTH_SECRET_PREV_FILE` in `.env` to the current `APP_AUTH_SECRET_FILE` value.
+3. `make -C proxy secret-app-auth-prev` to upload it as `APP_AUTH_SECRET_PREV`.
+4. `make app-auth-secret-generate` to create a new timestamped candidate.
+5. Set `APP_AUTH_SECRET_FILE` in `.env` to the new candidate.
+6. `make -C proxy secret-app-auth` to upload the new explicit active file.
+7. `make build && make dist` to rebuild the watch app.
+8. After the grace window, `make -C proxy secret-app-auth-prev-clear` and remove `APP_AUTH_SECRET_PREV_FILE` from `.env`.
+
+`make app-auth-secret-ensure` validates the explicitly configured active secret file exists and is non-empty; it never creates a secret. `make app-auth-secret-generate` only creates a new candidate; it never touches `.env` or the active build.
 
 ### Testing
 

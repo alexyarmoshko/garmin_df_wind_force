@@ -17,7 +17,8 @@ ENV_SETUP := test -f "$(ROOT_ENV_FILE)" || { echo "Root .env not found at $(ROOT
 	: "$${PROXY_ZONE:?PROXY_ZONE not set - add it to .env}"; \
 	: "$${BASE_NAME:?BASE_NAME not set - add it to .env}"
 
-.PHONY: config dev deploy clean info typecheck test test-e2e secret-app-auth
+.PHONY: config dev deploy clean info typecheck test test-e2e \
+	secret-app-auth secret-app-auth-prev secret-app-auth-prev-clear
 
 config: $(WRANGLER_CONFIG)
 
@@ -39,11 +40,35 @@ dev: config
 deploy: config
 	@$(WRANGLER) deploy --config "$(WRANGLER_CONFIG)"
 
+# Resolve the explicitly configured APP_AUTH_SECRET_FILE relative to the
+# repository root (the directory containing ROOT_ENV_FILE), then upload it
+# as Worker secret APP_AUTH_SECRET. Fails if the path is unset, missing, or
+# empty.
 secret-app-auth: config
 	@$(ENV_SETUP); \
 	: "$${APP_AUTH_SECRET_FILE:?APP_AUTH_SECRET_FILE not set - add it to .env}"; \
-	test -f "$$APP_AUTH_SECRET_FILE" || { echo "APP_AUTH_SECRET_FILE not found at $$APP_AUTH_SECRET_FILE"; exit 1; }; \
-	$(WRANGLER) secret put APP_AUTH_SECRET --config "$(WRANGLER_CONFIG)" < "$$APP_AUTH_SECRET_FILE"
+	ROOT_DIR="$$(cd "$$(dirname "$(ROOT_ENV_FILE)")" && pwd -P)"; \
+	case "$$APP_AUTH_SECRET_FILE" in /*) FILE="$$APP_AUTH_SECRET_FILE";; *) FILE="$$ROOT_DIR/$$APP_AUTH_SECRET_FILE";; esac; \
+	test -f "$$FILE" || { echo "APP_AUTH_SECRET_FILE not found at $$FILE"; exit 1; }; \
+	test -s "$$FILE" || { echo "APP_AUTH_SECRET_FILE at $$FILE is empty"; exit 1; }; \
+	$(WRANGLER) secret put APP_AUTH_SECRET --config "$(WRANGLER_CONFIG)" < "$$FILE"
+
+# Upload the explicitly configured APP_AUTH_SECRET_PREV_FILE as Worker
+# secret APP_AUTH_SECRET_PREV. Used during a rotation grace window so older
+# watch builds still authenticate.
+secret-app-auth-prev: config
+	@$(ENV_SETUP); \
+	: "$${APP_AUTH_SECRET_PREV_FILE:?APP_AUTH_SECRET_PREV_FILE not set - add it to .env}"; \
+	ROOT_DIR="$$(cd "$$(dirname "$(ROOT_ENV_FILE)")" && pwd -P)"; \
+	case "$$APP_AUTH_SECRET_PREV_FILE" in /*) FILE="$$APP_AUTH_SECRET_PREV_FILE";; *) FILE="$$ROOT_DIR/$$APP_AUTH_SECRET_PREV_FILE";; esac; \
+	test -f "$$FILE" || { echo "APP_AUTH_SECRET_PREV_FILE not found at $$FILE"; exit 1; }; \
+	test -s "$$FILE" || { echo "APP_AUTH_SECRET_PREV_FILE at $$FILE is empty"; exit 1; }; \
+	$(WRANGLER) secret put APP_AUTH_SECRET_PREV --config "$(WRANGLER_CONFIG)" < "$$FILE"
+
+# Delete APP_AUTH_SECRET_PREV from the Worker. Run after the grace window
+# closes; remove or blank APP_AUTH_SECRET_PREV_FILE in .env afterwards.
+secret-app-auth-prev-clear: config
+	@$(WRANGLER) secret delete APP_AUTH_SECRET_PREV --config "$(WRANGLER_CONFIG)"
 
 typecheck:
 	@npx --no-install tsc --noEmit
