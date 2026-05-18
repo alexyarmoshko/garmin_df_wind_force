@@ -367,7 +367,12 @@ export default {
       case "/v1/forecast":
         try {
           return await handleForecast(request, url, env);
-        } catch {
+        } catch (err) {
+          // Any exception escaping handleForecast is an upstream/network
+          // failure or a genuine bug; expected failure modes return typed
+          // error responses inside handleForecast. Log here so Cloudflare
+          // observability captures the cause behind the generic 502.
+          console.error("handleForecast unexpected error", err);
           return errorResponse("Upstream API failure or parsing error", 502);
         }
       default:

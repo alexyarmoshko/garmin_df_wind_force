@@ -1,7 +1,15 @@
 export interface Env {
   FORECAST_CACHE: KVNamespace;
+  /** Declared list of accepted X-WF-AppID values. Currently unused at
+   *  request time -- the encrypted-path filter relies on APP_AUTH_SECRET
+   *  via the X-WF-App-Mac header. Kept so the Wrangler vars surface is
+   *  ready for future multi-app-ID routing without a Worker type change. */
   APP_IDS: string[];
   APP_AUTH_SECRET: string;
+  /** Optional. Set only during a rotation grace window so the Worker
+   *  accepts requests signed with the previous secret while older watch
+   *  builds catch up. Cleared via
+   *  `make -C proxy secret-app-auth-prev-clear`. */
   APP_AUTH_SECRET_PREV?: string;
 }
 

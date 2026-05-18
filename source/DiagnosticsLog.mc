@@ -32,12 +32,12 @@ module DiagnosticsLog {
         return Lang.format(
             "$1$-$2$-$3$ $4$:$5$:$6$",
             [
-                nowInfo.year.toString(),
-                nowInfo.month.toString(),
-                nowInfo.day.toString(),
-                nowInfo.hour.toString(),
-                nowInfo.min.toString(),
-                nowInfo.sec.toString()
+                Lang.format("%04d", [nowInfo.year]),
+                Lang.format("%02d", [nowInfo.month]),
+                Lang.format("%02d", [nowInfo.day]),
+                Lang.format("%02d", [nowInfo.hour]),
+                Lang.format("%02d", [nowInfo.min]),
+                Lang.format("%02d", [nowInfo.sec])
             ]
         );
     }
