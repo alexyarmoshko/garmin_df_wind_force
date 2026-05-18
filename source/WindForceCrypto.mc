@@ -49,24 +49,32 @@ module WindForceCrypto {
     }
 
     //! Encode as Base64URL without padding (RFC 4648 §5).
+    //! Mutates the ASCII byte representation of the standard-Base64 form in
+    //! place so the URL-safe string is materialized with O(1) String
+    //! allocations rather than one per character.
     function base64urlEncode(b as ByteArray) as String {
-        var std = base64Encode(b);
-        // Replace +/ with -_ and strip trailing = padding.
-        var chars = std.toCharArray();
-        var out = ""; // build via concatenation; values are short (~200 chars)
-        for (var i = 0; i < chars.size(); i++) {
-            var c = chars[i];
-            if (c == '=') {
-                continue;
-            } else if (c == '+') {
-                out += "-";
-            } else if (c == '/') {
-                out += "_";
-            } else {
-                out += c.toString();
+        var ascii = StringUtil.convertEncodedString(base64Encode(b), {
+            :fromRepresentation => StringUtil.REPRESENTATION_STRING_PLAIN_TEXT,
+            :toRepresentation => StringUtil.REPRESENTATION_BYTE_ARRAY
+        }) as ByteArray;
+        var n = ascii.size();
+        // Drop trailing '=' padding (0x3d). Standard Base64 has at most two.
+        while (n > 0 && ascii[n - 1] == 0x3d) {
+            n -= 1;
+        }
+        // Replace '+' (0x2b) → '-' (0x2d) and '/' (0x2f) → '_' (0x5f).
+        for (var i = 0; i < n; i++) {
+            var c = ascii[i];
+            if (c == 0x2b) {
+                ascii[i] = 0x2d;
+            } else if (c == 0x2f) {
+                ascii[i] = 0x5f;
             }
         }
-        return out;
+        return StringUtil.convertEncodedString(ascii.slice(0, n), {
+            :fromRepresentation => StringUtil.REPRESENTATION_BYTE_ARRAY,
+            :toRepresentation => StringUtil.REPRESENTATION_STRING_PLAIN_TEXT
+        }) as String;
     }
 
     //! Derive enc/mac/auth keys from the standard-Base64 APP_AUTH_SECRET text.
