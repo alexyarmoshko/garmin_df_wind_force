@@ -81,7 +81,7 @@ garmin_df_wind_force/
     wrangler.jsonc.template  # Template for generated Wrangler config
     .wrangler/gen/      # Generated local Wrangler JSON config (gitignored)
   test/                 # Monkey C unit tests and GPX test routes
-  docs/                 # Requirements and execution plan
+  docs/                 # Requirements and release notes
 ```
 
 ## Development
